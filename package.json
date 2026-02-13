@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "bin": {
-    "fm": "dist/cli.js"
+    "work": "dist/cli.js"
   },
   "scripts": {
     "dev": "tsx src/cli.tsx",

@@ -40,7 +40,7 @@ function AppInner({ providers, wakatime, rescuetime }: Props) {
   if (state.status === "loading") {
     return (
       <Box borderStyle="round" borderColor="cyan" padding={1} flexDirection="column">
-        <Text bold> fm pipeline</Text>
+        <Text bold> work pipeline</Text>
         <Box paddingX={1} paddingY={1}>
           <Spinner label={`Fetching work items from ${providers.map((p) => p.name).join(", ")}...`} />
         </Box>
@@ -51,7 +51,7 @@ function AppInner({ providers, wakatime, rescuetime }: Props) {
   if (state.status === "error") {
     return (
       <Box borderStyle="round" borderColor="cyan" padding={1} flexDirection="column">
-        <Text bold> fm pipeline</Text>
+        <Text bold> work pipeline</Text>
         <Box paddingX={1}>
           <Text color="red">{state.message}</Text>
         </Box>
@@ -62,7 +62,7 @@ function AppInner({ providers, wakatime, rescuetime }: Props) {
   if (state.items.length === 0) {
     return (
       <Box borderStyle="round" borderColor="cyan" padding={1} flexDirection="column">
-        <Text bold> fm pipeline</Text>
+        <Text bold> work pipeline</Text>
         <Box paddingX={1}>
           <Text color="yellow">No assigned work items found.</Text>
         </Box>
@@ -117,7 +117,7 @@ function Dashboard({
   return (
     <Box flexDirection="column" borderStyle="round" borderColor="cyan">
       <Box paddingX={1} justifyContent="space-between">
-        <Text bold> fm pipeline</Text>
+        <Text bold> work pipeline</Text>
         <Text dimColor>{sources}</Text>
       </Box>
 

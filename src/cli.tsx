@@ -23,6 +23,6 @@ if (command === "time" && subcommand === "stats") {
   });
 } else {
   console.error(`Unknown command: ${command}`);
-  console.error("Usage: fm [start] | fm time stats");
+  console.error("Usage: work [start] | work time stats");
   process.exit(1);
 }

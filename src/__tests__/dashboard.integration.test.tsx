@@ -59,7 +59,7 @@ describe("Dashboard Integration", () => {
     expect(frame).toContain("Add dark mode");
     expect(frame).toContain("Update API docs");
     expect(frame).toContain("Work Items");
-    expect(frame).toContain("fm pipeline");
+    expect(frame).toContain("work pipeline");
 
     unmount();
   });
