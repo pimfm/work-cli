@@ -1,8 +1,15 @@
+import type { AgentName } from "../model/agent.js";
+import { PERSONALITIES } from "../model/personality.js";
 import type { WorkItem } from "../model/work-item.js";
 
 export function buildClaudePrompt(item: WorkItem, agentName: string): string {
+  const personality = PERSONALITIES[agentName.toLowerCase() as AgentName];
+  const personalityLine = personality
+    ? ` Your personality: ${personality.tagline}.`
+    : "";
+
   const lines: string[] = [
-    `You are agent "${agentName}" working on the following task:`,
+    `You are agent "${agentName}" working on the following task:${personalityLine}`,
     "",
     `# ${item.title}`,
     `- ID: ${item.id}`,

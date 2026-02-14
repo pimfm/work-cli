@@ -2,6 +2,7 @@ import React from "react";
 import { Box, Text } from "ink";
 import type { Agent } from "../model/agent.js";
 import { AGENTS } from "../model/agent.js";
+import { PERSONALITIES } from "../model/personality.js";
 import { agentStatusColor } from "./theme.js";
 
 interface Props {
@@ -33,6 +34,12 @@ export function AgentPanel({ agents, height }: Props) {
               <Text color={agentStatusColor(agent.status)}>
                 {agent.status.padEnd(13)}
               </Text>
+              {agent.status === "idle" && PERSONALITIES[agent.name] && (
+                <>
+                  <Text> </Text>
+                  <Text dimColor italic>{PERSONALITIES[agent.name].tagline}</Text>
+                </>
+              )}
               {agent.workItemTitle && (
                 <>
                   <Text> </Text>

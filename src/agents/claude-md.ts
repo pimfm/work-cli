@@ -1,7 +1,14 @@
 import { writeFileSync } from "fs";
 import { join } from "path";
+import type { AgentName } from "../model/agent.js";
+import { PERSONALITIES } from "../model/personality.js";
 
 export function writeClaudeMd(worktreePath: string, agentName: string): void {
+  const personality = PERSONALITIES[agentName.toLowerCase() as AgentName];
+  const personalitySection = personality
+    ? `\n## Personality\n${personality.systemPrompt}\n`
+    : "";
+
   const content = `# fm pipeline
 
 ## Project Overview
@@ -36,7 +43,7 @@ Built with TypeScript, React Ink (terminal UI), and Node.js.
 ## Agent Identity
 You are **${agentName}**, an autonomous agent working in a git worktree.
 Your changes will be submitted as a pull request for review.
-`;
+${personalitySection}`;
 
   writeFileSync(join(worktreePath, "CLAUDE.md"), content);
 }
