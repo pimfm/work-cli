@@ -27,6 +27,10 @@ const RescueTimeConfigSchema = z.object({
   api_key: z.string(),
 });
 
+const GitHubConfigSchema = z.object({
+  owner: z.string(),
+});
+
 const AgentsConfigSchema = z.object({
   repo_root: z.string().optional(),
   webhook_port: z.number().optional(),
@@ -37,6 +41,7 @@ const AppConfigSchema = z.object({
   linear: LinearConfigSchema.optional(),
   trello: TrelloConfigSchema.optional(),
   jira: JiraConfigSchema.optional(),
+  github: GitHubConfigSchema.optional(),
   wakatime: WakaTimeConfigSchema.optional(),
   rescuetime: RescueTimeConfigSchema.optional(),
   agents: AgentsConfigSchema.optional(),
@@ -46,6 +51,7 @@ export type AppConfig = z.infer<typeof AppConfigSchema>;
 export type LinearConfig = z.infer<typeof LinearConfigSchema>;
 export type TrelloConfig = z.infer<typeof TrelloConfigSchema>;
 export type JiraConfig = z.infer<typeof JiraConfigSchema>;
+export type GitHubConfig = z.infer<typeof GitHubConfigSchema>;
 
 export function loadConfig(): AppConfig {
   const configPath = join(homedir(), ".localpipeline", "config.toml");

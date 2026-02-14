@@ -3,6 +3,7 @@ import type { WorkItemProvider } from "./provider.js";
 import { LinearProvider } from "./linear/linear-provider.js";
 import { TrelloProvider } from "./trello/trello-provider.js";
 import { JiraProvider } from "./jira/jira-provider.js";
+import { GitHubProvider } from "./github/github-provider.js";
 
 export function createProviders(config: AppConfig): WorkItemProvider[] {
   const providers: WorkItemProvider[] = [];
@@ -17,6 +18,10 @@ export function createProviders(config: AppConfig): WorkItemProvider[] {
     providers.push(
       new JiraProvider(config.jira.domain, config.jira.email, config.jira.api_token)
     );
+  }
+
+  if (config.github) {
+    providers.push(new GitHubProvider(config.github.owner));
   }
 
   return providers;
