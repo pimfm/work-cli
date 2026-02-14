@@ -16,6 +16,7 @@ import { DetailPanel } from "./DetailPanel.js";
 import { TimePanel } from "./TimePanel.js";
 import { AgentPanel } from "./AgentPanel.js";
 import { Footer } from "./Footer.js";
+import { Breadcrumb } from "./Breadcrumb.js";
 import { Spinner } from "@inkjs/ui";
 
 interface Props {
@@ -123,7 +124,7 @@ function Dashboard({
     if (item) dispatchItem(item);
   }, [items, dispatchItem]);
 
-  const { selectedIndex, mode } = useNavigation(items.length, { onEnter, onComplete, onDispatch, onRefresh });
+  const { selectedIndex, mode, breadcrumbs, canGoBack } = useNavigation(items.length, { onEnter, onComplete, onDispatch, onRefresh });
   selectedRef.current = selectedIndex;
   const sources = [...new Set(items.map((i) => i.source))].join(" | ");
   const selectedItem = items[selectedIndex]!;
@@ -138,6 +139,8 @@ function Dashboard({
           <Text dimColor>{sources}</Text>
         </Box>
       </Box>
+
+      <Breadcrumb breadcrumbs={breadcrumbs} canGoBack={canGoBack} />
 
       {mode === "time-expanded" ? (
         <Box height={contentHeight + 3} overflow="hidden">
@@ -168,7 +171,7 @@ function Dashboard({
         </Box>
       )}
 
-      <Footer />
+      <Footer canGoBack={canGoBack} />
     </Box>
   );
 }

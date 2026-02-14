@@ -1,7 +1,13 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useInput, useApp } from "ink";
 
 export type DashboardMode = "normal" | "time-expanded" | "agents";
+
+export const MODE_LABELS: Record<DashboardMode, string> = {
+  "normal": "Dashboard",
+  "time-expanded": "Time Analytics",
+  "agents": "Agents",
+};
 
 interface NavigationCallbacks {
   onEnter?: () => void;
@@ -13,12 +19,43 @@ interface NavigationCallbacks {
 export function useNavigation(itemCount: number, callbacks?: NavigationCallbacks) {
   const { exit } = useApp();
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [mode, setMode] = useState<DashboardMode>("normal");
+  const [modeStack, setModeStack] = useState<DashboardMode[]>(["normal"]);
+
+  const mode = modeStack[modeStack.length - 1]!;
+
+  const navigateTo = useCallback((target: DashboardMode) => {
+    setModeStack((stack) => {
+      const current = stack[stack.length - 1];
+      if (current === target) return stack;
+      return [...stack, target];
+    });
+  }, []);
+
+  const navigateBack = useCallback(() => {
+    setModeStack((stack) => {
+      if (stack.length <= 1) return stack;
+      return stack.slice(0, -1);
+    });
+  }, []);
+
+  const breadcrumbs = modeStack.map((m) => MODE_LABELS[m]);
+  const canGoBack = modeStack.length > 1;
 
   useInput((input, key) => {
     if (input === "q" || key.escape) {
+      if (canGoBack) {
+        navigateBack();
+        return;
+      }
       exit();
       return;
+    }
+
+    if (key.backspace || key.delete) {
+      if (canGoBack) {
+        navigateBack();
+        return;
+      }
     }
 
     if (key.upArrow) {
@@ -31,7 +68,11 @@ export function useNavigation(itemCount: number, callbacks?: NavigationCallbacks
       callbacks?.onEnter?.();
     }
     if (input === "t") {
-      setMode((m) => (m === "time-expanded" ? "normal" : "time-expanded"));
+      if (mode === "time-expanded") {
+        navigateBack();
+      } else {
+        navigateTo("time-expanded");
+      }
     }
     if (input === "c") {
       callbacks?.onComplete?.();
@@ -40,7 +81,11 @@ export function useNavigation(itemCount: number, callbacks?: NavigationCallbacks
       callbacks?.onDispatch?.();
     }
     if (input === "a") {
-      setMode((m) => (m === "agents" ? "normal" : "agents"));
+      if (mode === "agents") {
+        navigateBack();
+      } else {
+        navigateTo("agents");
+      }
     }
     if (input === "r") {
       callbacks?.onRefresh?.();
@@ -49,5 +94,5 @@ export function useNavigation(itemCount: number, callbacks?: NavigationCallbacks
 
   const clampedIndex = Math.min(selectedIndex, Math.max(0, itemCount - 1));
 
-  return { selectedIndex: clampedIndex, mode };
+  return { selectedIndex: clampedIndex, mode, breadcrumbs, canGoBack };
 }
