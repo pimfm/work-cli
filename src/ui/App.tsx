@@ -132,15 +132,21 @@ function Dashboard({
   return (
     <Box flexDirection="column" borderStyle="round" borderColor="cyan">
       <Box paddingX={1} justifyContent="space-between">
-        <Text bold> work pipeline</Text>
+        <Box>
+          <Text bold> work pipeline</Text>
+          {canGoBack && (
+            <>
+              <Text dimColor>  </Text>
+              <Breadcrumb items={breadcrumbs} />
+            </>
+          )}
+        </Box>
         <Box>
           {isRefreshing && <Text color="cyan">refreshing...  </Text>}
           {flashMessage && <Text color="yellow">{flashMessage}  </Text>}
           <Text dimColor>{sources}</Text>
         </Box>
       </Box>
-
-      <Breadcrumb breadcrumbs={breadcrumbs} canGoBack={canGoBack} />
 
       {mode === "time-expanded" ? (
         <Box height={contentHeight + 3} overflow="hidden">

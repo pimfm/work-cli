@@ -22,11 +22,11 @@ export function useNavigation(itemCount: number, callbacks?: NavigationCallbacks
   const [modeStack, setModeStack] = useState<DashboardMode[]>(["normal"]);
 
   const mode = modeStack[modeStack.length - 1]!;
+  const canGoBack = modeStack.length > 1;
 
   const navigateTo = useCallback((target: DashboardMode) => {
     setModeStack((stack) => {
-      const current = stack[stack.length - 1];
-      if (current === target) return stack;
+      if (stack[stack.length - 1] === target) return stack;
       return [...stack, target];
     });
   }, []);
@@ -39,7 +39,6 @@ export function useNavigation(itemCount: number, callbacks?: NavigationCallbacks
   }, []);
 
   const breadcrumbs = modeStack.map((m) => MODE_LABELS[m]);
-  const canGoBack = modeStack.length > 1;
 
   useInput((input, key) => {
     if (input === "q" || key.escape) {
@@ -89,6 +88,9 @@ export function useNavigation(itemCount: number, callbacks?: NavigationCallbacks
     }
     if (input === "r") {
       callbacks?.onRefresh?.();
+    }
+    if (input === "b") {
+      navigateBack();
     }
   });
 

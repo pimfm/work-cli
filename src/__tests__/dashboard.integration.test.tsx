@@ -245,7 +245,7 @@ describe("Dashboard Integration", () => {
     frame = lastFrame();
     expect(frame).toContain("Time Analytics");
 
-    // Press 't' again to go back to normal
+    // Press 't' again to toggle back to normal
     stdin.write("t");
     await delay(20);
 

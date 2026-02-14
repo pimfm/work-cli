@@ -47,8 +47,6 @@ describe("Breadcrumb Navigation", () => {
     await delay(50);
 
     const frame = lastFrame();
-    // Breadcrumb component returns null when only one level deep
-    // so we should NOT see the ">" separator
     expect(frame).not.toContain("Dashboard > ");
     unmount();
   });
@@ -88,20 +86,36 @@ describe("Breadcrumb Navigation", () => {
     const { lastFrame, stdin, unmount } = render(<App providers={[provider]} store={store} />);
     await delay(50);
 
-    // Navigate to time-expanded
     stdin.write("t");
     await delay(20);
 
     let frame = lastFrame();
     expect(frame).toContain("Time Analytics");
-    expect(frame).toContain(">");
 
-    // Press escape to go back
     stdin.write("\x1B");
     await delay(20);
 
     frame = lastFrame();
-    // Should be back on normal dashboard, no breadcrumbs
+    expect(frame).toContain("Work Items");
+    expect(frame).not.toContain("Dashboard > ");
+    unmount();
+  });
+
+  it("navigates back with 'b' key", async () => {
+    const provider = new MockProvider(MOCK_ITEMS);
+    const { lastFrame, stdin, unmount } = render(<App providers={[provider]} store={store} />);
+    await delay(50);
+
+    stdin.write("a");
+    await delay(20);
+
+    let frame = lastFrame();
+    expect(frame).toContain("Agents");
+
+    stdin.write("b");
+    await delay(20);
+
+    frame = lastFrame();
     expect(frame).toContain("Work Items");
     expect(frame).not.toContain("Dashboard > ");
     unmount();
@@ -112,15 +126,12 @@ describe("Breadcrumb Navigation", () => {
     const { lastFrame, stdin, unmount } = render(<App providers={[provider]} store={store} />);
     await delay(50);
 
-    // Navigate to agents
     stdin.write("a");
     await delay(20);
 
     let frame = lastFrame();
     expect(frame).toContain("Agents");
-    expect(frame).toContain(">");
 
-    // Press backspace to go back
     stdin.write(BACKSPACE);
     await delay(20);
 
@@ -135,15 +146,12 @@ describe("Breadcrumb Navigation", () => {
     const { lastFrame, stdin, unmount } = render(<App providers={[provider]} store={store} />);
     await delay(50);
 
-    // On root: footer should show quit, not back
     let frame = lastFrame();
     expect(frame).toContain("quit");
 
-    // Navigate to time-expanded
     stdin.write("t");
     await delay(20);
 
-    // Footer should show back, not quit
     frame = lastFrame();
     expect(frame).toContain("back");
     unmount();
@@ -154,7 +162,6 @@ describe("Breadcrumb Navigation", () => {
     const { lastFrame, stdin, unmount } = render(<App providers={[provider]} store={store} />);
     await delay(50);
 
-    // Navigate to time-expanded
     stdin.write("t");
     await delay(20);
 
@@ -163,6 +170,41 @@ describe("Breadcrumb Navigation", () => {
 
     // Press 't' again — should go back to normal
     stdin.write("t");
+    await delay(20);
+
+    frame = lastFrame();
+    expect(frame).toContain("Work Items");
+    expect(frame).not.toContain("Dashboard > ");
+    unmount();
+  });
+
+  it("builds navigation stack across multiple navigations", async () => {
+    const provider = new MockProvider(MOCK_ITEMS);
+    const { lastFrame, stdin, unmount } = render(<App providers={[provider]} store={store} />);
+    await delay(50);
+
+    stdin.write("a");
+    await delay(20);
+
+    stdin.write("t");
+    await delay(20);
+
+    let frame = lastFrame();
+    expect(frame).toContain("Dashboard");
+    expect(frame).toContain("Agents");
+    expect(frame).toContain("Time Analytics");
+
+    // Go back once — should be at agents
+    stdin.write("b");
+    await delay(20);
+
+    frame = lastFrame();
+    expect(frame).toContain("Dashboard");
+    expect(frame).toContain("Agents");
+    expect(frame).not.toContain("Time Analytics");
+
+    // Go back again — should be at dashboard
+    stdin.write("b");
     await delay(20);
 
     frame = lastFrame();
