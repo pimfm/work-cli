@@ -27,6 +27,11 @@ const RescueTimeConfigSchema = z.object({
   api_key: z.string(),
 });
 
+const GitHubConfigSchema = z.object({
+  owner: z.string().optional(),
+  repo: z.string().optional(),
+});
+
 const AgentsConfigSchema = z.object({
   repo_root: z.string().optional(),
   webhook_port: z.number().optional(),
@@ -37,6 +42,7 @@ const AppConfigSchema = z.object({
   linear: LinearConfigSchema.optional(),
   trello: TrelloConfigSchema.optional(),
   jira: JiraConfigSchema.optional(),
+  github: GitHubConfigSchema.optional(),
   wakatime: WakaTimeConfigSchema.optional(),
   rescuetime: RescueTimeConfigSchema.optional(),
   agents: AgentsConfigSchema.optional(),
