@@ -8,6 +8,10 @@ export function writeClaudeMd(worktreePath: string, agentName: string): void {
   const personalitySection = personality
     ? `\n### Personality: ${personality.tagline}
 - **Traits**: ${personality.traits.join(", ")}
+- **Focus**: ${personality.focus}
+
+> ${personality.soul}
+
 - **Working style**: ${personality.systemPrompt}\n`
     : "";
 

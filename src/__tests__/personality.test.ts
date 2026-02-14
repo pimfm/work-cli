@@ -16,6 +16,8 @@ describe("Agent personalities", () => {
         expect(PERSONALITIES[name]).toBeDefined();
         expect(PERSONALITIES[name].tagline).toBeTruthy();
         expect(PERSONALITIES[name].traits.length).toBeGreaterThan(0);
+        expect(PERSONALITIES[name].focus).toBeTruthy();
+        expect(PERSONALITIES[name].soul).toBeTruthy();
         expect(PERSONALITIES[name].systemPrompt).toBeTruthy();
       }
     });
@@ -28,6 +30,16 @@ describe("Agent personalities", () => {
     it("each agent has unique traits", () => {
       const allTraits = AGENT_NAMES.flatMap((n) => PERSONALITIES[n].traits);
       expect(new Set(allTraits).size).toBe(allTraits.length);
+    });
+
+    it("each agent has unique focus", () => {
+      const focuses = AGENT_NAMES.map((n) => PERSONALITIES[n].focus);
+      expect(new Set(focuses).size).toBe(focuses.length);
+    });
+
+    it("each agent has unique soul", () => {
+      const souls = AGENT_NAMES.map((n) => PERSONALITIES[n].soul);
+      expect(new Set(souls).size).toBe(souls.length);
     });
   });
 
@@ -58,6 +70,14 @@ describe("Agent personalities", () => {
       const prompt = buildClaudePrompt(item, "Terra");
       expect(prompt).toContain("Build to last");
     });
+
+    it("includes focus and soul in prompt", () => {
+      const prompt = buildClaudePrompt(item, "Ember");
+      expect(prompt).toContain("Focus:");
+      expect(prompt).toContain("Rapid iteration");
+      expect(prompt).toContain("### Soul");
+      expect(prompt).toContain("burns through ambiguity");
+    });
   });
 
   describe("writeClaudeMd with personality", () => {
@@ -76,6 +96,14 @@ describe("Agent personalities", () => {
       const content = readFileSync(join(tmpDir, "CLAUDE.md"), "utf-8");
       expect(content).toContain("## Personality");
       expect(content).toContain("speed and pragmatism");
+    });
+
+    it("includes focus and soul in CLAUDE.md", () => {
+      writeClaudeMd(tmpDir, "Ember");
+      const content = readFileSync(join(tmpDir, "CLAUDE.md"), "utf-8");
+      expect(content).toContain("**Focus**");
+      expect(content).toContain("Rapid iteration");
+      expect(content).toContain("burns through ambiguity");
     });
 
     it("includes personality system prompt for tide", () => {

@@ -49,6 +49,8 @@ export function AgentPanel({ agents, height, selectedIndex, expandedAgent, detai
                 <>
                   <Text> </Text>
                   <Text dimColor italic>{PERSONALITIES[agent.name].tagline}</Text>
+                  <Text dimColor>{" · "}</Text>
+                  <Text dimColor>{PERSONALITIES[agent.name].focus}</Text>
                 </>
               )}
               {agent.workItemTitle && (

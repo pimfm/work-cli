@@ -45,7 +45,13 @@ export function buildClaudePrompt(item: WorkItem, agentName: string): string {
       "",
       `## Personality: ${personality.tagline}`,
       `- Traits: ${personality.traits.join(", ")}`,
-      `- Working style: ${personality.systemPrompt}`,
+      `- Focus: ${personality.focus}`,
+      "",
+      `### Soul`,
+      personality.soul,
+      "",
+      `### Working style`,
+      personality.systemPrompt,
     );
   }
 

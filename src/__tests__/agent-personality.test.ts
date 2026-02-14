@@ -11,12 +11,14 @@ import type { WorkItem } from "../model/work-item.js";
 
 describe("agent personalities", () => {
   describe("model", () => {
-    it("every agent has a personality with tagline, traits, and systemPrompt", () => {
+    it("every agent has a personality with tagline, traits, focus, soul, and systemPrompt", () => {
       for (const name of AGENT_NAMES) {
         const personality = PERSONALITIES[name];
         expect(personality).toBeDefined();
         expect(personality.tagline).toBeTruthy();
         expect(personality.traits.length).toBeGreaterThan(0);
+        expect(personality.focus).toBeTruthy();
+        expect(personality.soul).toBeTruthy();
         expect(personality.systemPrompt).toBeTruthy();
       }
     });
@@ -29,6 +31,23 @@ describe("agent personalities", () => {
     it("each agent has unique traits", () => {
       const allTraits = AGENT_NAMES.flatMap((n) => PERSONALITIES[n].traits);
       expect(new Set(allTraits).size).toBe(allTraits.length);
+    });
+
+    it("each agent has unique focus", () => {
+      const focuses = AGENT_NAMES.map((n) => PERSONALITIES[n].focus);
+      expect(new Set(focuses).size).toBe(focuses.length);
+    });
+
+    it("each agent has unique soul", () => {
+      const souls = AGENT_NAMES.map((n) => PERSONALITIES[n].soul);
+      expect(new Set(souls).size).toBe(souls.length);
+    });
+
+    it("soul references the agent by name", () => {
+      for (const name of AGENT_NAMES) {
+        const displayName = name.charAt(0).toUpperCase() + name.slice(1);
+        expect(PERSONALITIES[name].soul).toContain(displayName);
+      }
     });
   });
 
@@ -49,6 +68,9 @@ describe("agent personalities", () => {
 
       expect(content).toContain("### Personality: Move fast, ship clean");
       expect(content).toContain("decisive, pragmatic, velocity-focused");
+      expect(content).toContain("**Focus**");
+      expect(content).toContain(PERSONALITIES.ember.focus);
+      expect(content).toContain(PERSONALITIES.ember.soul);
       expect(content).toContain("You value speed and pragmatism");
     });
 
@@ -90,6 +112,10 @@ describe("agent personalities", () => {
       const prompt = buildClaudePrompt(item, "Ember");
       expect(prompt).toContain("## Personality: Move fast, ship clean");
       expect(prompt).toContain("decisive, pragmatic, velocity-focused");
+      expect(prompt).toContain("Focus:");
+      expect(prompt).toContain(PERSONALITIES.ember.focus);
+      expect(prompt).toContain("### Soul");
+      expect(prompt).toContain(PERSONALITIES.ember.soul);
     });
 
     it("includes personality for all agents", () => {
