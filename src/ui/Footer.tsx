@@ -1,10 +1,16 @@
 import React from "react";
 import { Box, Text } from "ink";
 
-export function Footer() {
+interface Props {
+  canGoBack?: boolean;
+}
+
+export function Footer({ canGoBack }: Props) {
   return (
     <Box paddingX={1}>
-      <Text dimColor>[↑/↓] navigate  [enter] start/stop  [d] dispatch  [a] agents  [t] time  [r] refresh  [c] complete  [q/esc] quit</Text>
+      <Text dimColor>
+        {canGoBack ? "[esc/⌫] back  " : ""}[↑/↓] navigate  [enter] start/stop  [d] dispatch  [a] agents  [t] time  [r] refresh  [c] complete  {canGoBack ? "" : "[q/esc] quit"}
+      </Text>
     </Box>
   );
 }
