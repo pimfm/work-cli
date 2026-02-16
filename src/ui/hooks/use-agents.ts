@@ -8,6 +8,7 @@ import type { WorkItemProvider } from "../../providers/provider.js";
 import { AgentStore } from "../../agents/agent-store.js";
 import { dispatchToAgent, retryAgent } from "../../agents/dispatch.js";
 import { appendEvent } from "../../persistence/agent-log.js";
+import { moveCard } from "../../agents/card-mover.js";
 
 const MAX_RETRIES = 3;
 
@@ -41,8 +42,11 @@ export function useAgents(repoRoot?: string, providers?: WorkItemProvider[]): Us
       const current = store.getAll();
 
       for (const agent of current) {
-        // Auto-release done agents
+        // Auto-release done agents and move card to "In Review"
         if (agent.status === "done") {
+          if (agent.workItemId) {
+            moveCard(providers ?? [], agent.workItemId, "in_review").catch(() => {});
+          }
           appendEvent({
             timestamp: new Date().toISOString(),
             agent: agent.name,
@@ -120,13 +124,15 @@ export function useAgents(repoRoot?: string, providers?: WorkItemProvider[]): Us
       }
 
       setIsDispatching(true);
-      dispatchToAgent(freeAgent, item, root, store).finally(() => {
-        store.reload();
-        setAgents(store.getAll());
-        setIsDispatching(false);
-      });
+      dispatchToAgent(freeAgent, item, root, store)
+        .then(() => moveCard(providers ?? [], item.id, "in_progress").catch(() => {}))
+        .finally(() => {
+          store.reload();
+          setAgents(store.getAll());
+          setIsDispatching(false);
+        });
     },
-    [store, repoRoot],
+    [store, repoRoot, providers],
   );
 
   const agentForItem = useCallback(

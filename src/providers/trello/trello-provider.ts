@@ -1,6 +1,12 @@
 import type { WorkItem } from "../../model/work-item.js";
-import type { WorkItemProvider, Board } from "../provider.js";
+import type { WorkItemProvider, Board, CardStatus } from "../provider.js";
 import type { TrelloMember, TrelloCard, TrelloBoard, TrelloList } from "./trello-types.js";
+
+const STATUS_LIST_NAMES: Record<CardStatus, string> = {
+  in_progress: "In Progress",
+  in_review: "In Review",
+  done: "Done",
+};
 
 export class TrelloProvider implements WorkItemProvider {
   name = "Trello";
@@ -40,6 +46,17 @@ export class TrelloProvider implements WorkItemProvider {
     return res.json();
   }
 
+  private async put(path: string, body: Record<string, string>): Promise<void> {
+    const params = this.params();
+    for (const [k, v] of Object.entries(body)) params.set(k, v);
+    const res = await fetch(`https://api.trello.com/1${path}?${params}`, {
+      method: "PUT",
+    });
+    if (!res.ok) {
+      throw new Error(`Trello API error: ${res.status} ${res.statusText}`);
+    }
+  }
+
   async addComment(itemId: string, comment: string): Promise<void> {
     const params = this.params();
     params.set("text", comment);
@@ -49,6 +66,25 @@ export class TrelloProvider implements WorkItemProvider {
     if (!res.ok) {
       throw new Error(`Trello API error: ${res.status} ${res.statusText}`);
     }
+  }
+
+  async moveCard(itemId: string, status: CardStatus): Promise<void> {
+    const targetListName = STATUS_LIST_NAMES[status];
+
+    // Get card to find its board
+    const card = await this.get<TrelloCard>(`/cards/${itemId}`, { fields: "idBoard" });
+
+    // Get lists on the board
+    const lists = await this.get<TrelloList[]>(`/boards/${card.idBoard}/lists`, { fields: "id,name" });
+
+    const targetList = lists.find(
+      (l) => l.name.toLowerCase() === targetListName.toLowerCase(),
+    );
+    if (!targetList) {
+      throw new Error(`Trello list "${targetListName}" not found on board ${card.idBoard}`);
+    }
+
+    await this.put(`/cards/${itemId}`, { idList: targetList.id });
   }
 
   async fetchAssignedItems(): Promise<WorkItem[]> {

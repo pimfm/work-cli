@@ -1,6 +1,12 @@
 import type { WorkItem } from "../../model/work-item.js";
-import type { WorkItemProvider } from "../provider.js";
+import type { WorkItemProvider, CardStatus } from "../provider.js";
 import type { LinearGraphQLResponse } from "./linear-types.js";
+
+const STATUS_STATE_NAMES: Record<CardStatus, string> = {
+  in_progress: "In Progress",
+  in_review: "In Review",
+  done: "Done",
+};
 
 export class LinearProvider implements WorkItemProvider {
   name = "Linear";
@@ -102,6 +108,67 @@ export class LinearProvider implements WorkItemProvider {
     if (!res.ok) {
       throw new Error(`Linear API error: ${res.status} ${res.statusText}`);
     }
+  }
+
+  async moveCard(itemId: string, status: CardStatus): Promise<void> {
+    const targetName = STATUS_STATE_NAMES[status];
+
+    // Look up issue UUID and team ID by identifier
+    const lookupQuery = `{
+      issues(filter: { identifier: { eq: "${itemId}" } }, first: 1) {
+        nodes { id, team { id } }
+      }
+    }`;
+    const lookupRes = await this.graphql<{
+      issues: { nodes: { id: string; team: { id: string } }[] };
+    }>(lookupQuery);
+    const issue = lookupRes.issues.nodes[0];
+    if (!issue) {
+      throw new Error(`Linear issue not found: ${itemId}`);
+    }
+
+    // Find the target workflow state for the team
+    const statesQuery = `{
+      workflowStates(filter: { team: { id: { eq: "${issue.team.id}" } } }, first: 50) {
+        nodes { id, name }
+      }
+    }`;
+    const statesRes = await this.graphql<{
+      workflowStates: { nodes: { id: string; name: string }[] };
+    }>(statesQuery);
+    const targetState = statesRes.workflowStates.nodes.find(
+      (s) => s.name.toLowerCase() === targetName.toLowerCase(),
+    );
+    if (!targetState) {
+      throw new Error(`Linear state "${targetName}" not found for team ${issue.team.id}`);
+    }
+
+    // Update issue state
+    const mutation = `mutation {
+      issueUpdate(id: "${issue.id}", input: { stateId: "${targetState.id}" }) {
+        success
+      }
+    }`;
+    await this.graphql<{ issueUpdate: { success: boolean } }>(mutation);
+  }
+
+  private async graphql<T>(query: string): Promise<T> {
+    const res = await fetch("https://api.linear.app/graphql", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: this.apiKey,
+      },
+      body: JSON.stringify({ query }),
+    });
+    if (!res.ok) {
+      throw new Error(`Linear API error: ${res.status} ${res.statusText}`);
+    }
+    const json = await res.json() as { data?: T };
+    if (!json.data) {
+      throw new Error("Linear API returned no data");
+    }
+    return json.data;
   }
 }
 

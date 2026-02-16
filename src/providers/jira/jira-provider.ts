@@ -1,7 +1,13 @@
 import type { WorkItem } from "../../model/work-item.js";
-import type { WorkItemProvider } from "../provider.js";
+import type { WorkItemProvider, CardStatus } from "../provider.js";
 import type { JiraSearchResponse } from "./jira-types.js";
 import { extractTextFromAdf } from "../../utils/adf-parser.js";
+
+const STATUS_TRANSITION_NAMES: Record<CardStatus, string> = {
+  in_progress: "In Progress",
+  in_review: "In Review",
+  done: "Done",
+};
 
 export class JiraProvider implements WorkItemProvider {
   name = "Jira";
@@ -39,6 +45,48 @@ export class JiraProvider implements WorkItemProvider {
       body: JSON.stringify(body),
     });
 
+    if (!res.ok) {
+      throw new Error(`Jira API error: ${res.status} ${res.statusText}`);
+    }
+  }
+
+  async moveCard(itemId: string, status: CardStatus): Promise<void> {
+    const baseUrl = `https://${this.domain}.atlassian.net`;
+    const auth = Buffer.from(`${this.email}:${this.apiToken}`).toString("base64");
+    const targetName = STATUS_TRANSITION_NAMES[status];
+
+    // Get available transitions for the issue
+    const transRes = await fetch(`${baseUrl}/rest/api/3/issue/${itemId}/transitions`, {
+      headers: {
+        Authorization: `Basic ${auth}`,
+        Accept: "application/json",
+      },
+    });
+    if (!transRes.ok) {
+      throw new Error(`Jira API error: ${transRes.status} ${transRes.statusText}`);
+    }
+
+    const transJson = await transRes.json() as {
+      transitions: Array<{ id: string; name: string; to: { name: string } }>;
+    };
+
+    const transition = transJson.transitions.find(
+      (t) => t.to.name.toLowerCase() === targetName.toLowerCase(),
+    );
+    if (!transition) {
+      throw new Error(`Jira transition to "${targetName}" not found for issue ${itemId}`);
+    }
+
+    // Execute transition
+    const res = await fetch(`${baseUrl}/rest/api/3/issue/${itemId}/transitions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${auth}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({ transition: { id: transition.id } }),
+    });
     if (!res.ok) {
       throw new Error(`Jira API error: ${res.status} ${res.statusText}`);
     }

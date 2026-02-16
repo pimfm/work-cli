@@ -4,9 +4,11 @@ import { parseJiraWebhook } from "./handlers/jira-handler.js";
 import { parseLinearWebhook } from "./handlers/linear-handler.js";
 import { parseClickUpWebhook } from "./handlers/clickup-handler.js";
 import { parseAsanaWebhook } from "./handlers/asana-handler.js";
-import { parseGitHubWebhook } from "./handlers/github-handler.js";
+import { parseGitHubWebhook, parseGitHubPrMerge } from "./handlers/github-handler.js";
 import { webhookDispatch } from "./webhook-dispatcher.js";
+import { moveCard } from "../agents/card-mover.js";
 import type { WorkItem } from "../model/work-item.js";
+import type { WorkItemProvider } from "../providers/provider.js";
 
 type Parser = (body: any) => WorkItem | undefined;
 
@@ -33,7 +35,12 @@ function json(res: ServerResponse, status: number, body: object): void {
   res.end(JSON.stringify(body));
 }
 
-export function startWebhookServer(port: number, repoRoot: string, secret?: string): ReturnType<typeof createServer> {
+export function startWebhookServer(
+  port: number,
+  repoRoot: string,
+  secret?: string,
+  providers?: WorkItemProvider[],
+): ReturnType<typeof createServer> {
   const server = createServer(async (req, res) => {
     const url = req.url ?? "";
 
@@ -76,6 +83,17 @@ export function startWebhookServer(port: number, repoRoot: string, secret?: stri
     try {
       const raw = await readBody(req);
       const body = JSON.parse(raw);
+
+      // Check for PR merge events (GitHub only) → move card to "Done"
+      if (provider === "github" && providers) {
+        const prMerge = parseGitHubPrMerge(body);
+        if (prMerge) {
+          await moveCard(providers, prMerge.itemId, prMerge.status);
+          json(res, 200, { cardMoved: true, itemId: prMerge.itemId, status: prMerge.status });
+          return;
+        }
+      }
+
       const item = parser(body);
 
       if (!item) {
@@ -83,7 +101,7 @@ export function startWebhookServer(port: number, repoRoot: string, secret?: stri
         return;
       }
 
-      const result = await webhookDispatch(item, repoRoot);
+      const result = await webhookDispatch(item, repoRoot, providers);
       if (result.dispatched) {
         json(res, 200, { dispatched: true, agent: result.agent, item: item.id });
       } else {
