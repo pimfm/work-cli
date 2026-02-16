@@ -56,6 +56,31 @@ export class GitHubProvider implements WorkItemProvider {
     return issues.map((issue) => mapIssueToWorkItem(issue));
   }
 
+  async addComment(itemId: string, comment: string): Promise<void> {
+    // itemId format: "owner/repo#123"
+    const match = itemId.match(/^(.+)#(\d+)$/);
+    if (!match) {
+      throw new Error(`Invalid GitHub item ID format: ${itemId}`);
+    }
+    const [, repo, number] = match;
+
+    const args = [
+      "issue",
+      "comment",
+      number!,
+      "--repo",
+      repo!,
+      "--body",
+      comment,
+    ];
+
+    try {
+      this.cli.run(args);
+    } catch {
+      throw new Error("Failed to add GitHub comment. Is the gh CLI installed and authenticated?");
+    }
+  }
+
   async fetchBoards(): Promise<Board[]> {
     const args = [
       "repo",
@@ -85,7 +110,7 @@ export class GitHubProvider implements WorkItemProvider {
 
 function mapIssueToWorkItem(issue: GhIssue): WorkItem {
   return {
-    id: `#${issue.number}`,
+    id: `${issue.repository.nameWithOwner}#${issue.number}`,
     title: issue.title,
     description: issue.body?.slice(0, 500),
     status: issue.state,

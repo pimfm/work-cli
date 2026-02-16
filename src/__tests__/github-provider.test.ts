@@ -5,7 +5,7 @@ function mockCli(responses: Record<string, string>): GhCliRunner {
   return {
     run(args: string[]): string {
       const key = args[0];
-      if (key && key in responses) return responses[key];
+      if (key && key in responses) return responses[key]!;
       throw new Error(`Unexpected gh command: ${args.join(" ")}`);
     },
   };
@@ -47,7 +47,7 @@ describe("GitHubProvider", () => {
 
       expect(items).toHaveLength(2);
       expect(items[0]).toEqual({
-        id: "#42",
+        id: "acme/app#42",
         title: "Fix auth flow",
         description: "The login page is broken",
         status: "open",
@@ -57,7 +57,7 @@ describe("GitHubProvider", () => {
         url: "https://github.com/acme/app/issues/42",
       });
       expect(items[1]).toEqual({
-        id: "#7",
+        id: "acme/app#7",
         title: "Add dark mode",
         description: "",
         status: "open",
@@ -145,6 +145,57 @@ describe("GitHubProvider", () => {
 
       await expect(provider.fetchBoards()).rejects.toThrow(
         "Failed to list GitHub repositories"
+      );
+    });
+  });
+
+  describe("addComment", () => {
+    it("calls gh issue comment with correct args", async () => {
+      let capturedArgs: string[] = [];
+      const cli: GhCliRunner = {
+        run(args: string[]): string {
+          capturedArgs = args;
+          return "";
+        },
+      };
+      const provider = new GitHubProvider("acme", cli);
+
+      await provider.addComment("acme/app#42", "Agent failed");
+
+      expect(capturedArgs).toEqual([
+        "issue",
+        "comment",
+        "42",
+        "--repo",
+        "acme/app",
+        "--body",
+        "Agent failed",
+      ]);
+    });
+
+    it("throws on invalid item ID format", async () => {
+      const cli: GhCliRunner = {
+        run(): string {
+          return "";
+        },
+      };
+      const provider = new GitHubProvider("acme", cli);
+
+      await expect(provider.addComment("bad-id", "test")).rejects.toThrow(
+        "Invalid GitHub item ID format"
+      );
+    });
+
+    it("throws on CLI failure", async () => {
+      const cli: GhCliRunner = {
+        run() {
+          throw new Error("not installed");
+        },
+      };
+      const provider = new GitHubProvider("acme", cli);
+
+      await expect(provider.addComment("acme/app#42", "test")).rejects.toThrow(
+        "Failed to add GitHub comment"
       );
     });
   });
