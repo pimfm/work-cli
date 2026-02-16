@@ -31,6 +31,7 @@ export function useAgents(repoRoot?: string, providers?: WorkItemProvider[]): Us
   const [isDispatching, setIsDispatching] = useState(false);
   const [flashMessage, setFlashMessage] = useState<string | undefined>();
   const retryingRef = useRef<Set<AgentName>>(new Set());
+  const completingRef = useRef<Set<AgentName>>(new Set());
 
   // Poll for updates every 2s
   useEffect(() => {
@@ -41,17 +42,22 @@ export function useAgents(repoRoot?: string, providers?: WorkItemProvider[]): Us
       const current = store.getAll();
 
       for (const agent of current) {
-        // Auto-release done agents
-        if (agent.status === "done") {
-          appendEvent({
-            timestamp: new Date().toISOString(),
-            agent: agent.name,
-            event: "released",
-            workItemId: agent.workItemId,
-            workItemTitle: agent.workItemTitle,
-            message: "Auto-released after completion",
-          });
-          store.release(agent.name);
+        // Mark work item done and auto-release completed agents
+        if (agent.status === "done" && !completingRef.current.has(agent.name)) {
+          completingRef.current.add(agent.name);
+          markWorkItemDone(agent, providers ?? [])
+            .finally(() => {
+              appendEvent({
+                timestamp: new Date().toISOString(),
+                agent: agent.name,
+                event: "released",
+                workItemId: agent.workItemId,
+                workItemTitle: agent.workItemTitle,
+                message: "Auto-released after completion",
+              });
+              store.release(agent.name);
+              completingRef.current.delete(agent.name);
+            });
         }
 
         // Retry errored agents
@@ -145,6 +151,35 @@ export function useAgents(repoRoot?: string, providers?: WorkItemProvider[]): Us
   );
 
   return { agents, dispatchItem, isDispatching, flashMessage, agentForItem, releaseAgent };
+}
+
+export async function markWorkItemDone(agent: Agent, providers: WorkItemProvider[]): Promise<void> {
+  if (!agent.workItemId || !agent.workItemSource) return;
+
+  const provider = providers.find((p) => p.name === agent.workItemSource);
+  if (!provider?.markItemDone) return;
+
+  try {
+    await provider.markItemDone(agent.workItemId);
+    appendEvent({
+      timestamp: new Date().toISOString(),
+      agent: agent.name,
+      event: "marked-done",
+      workItemId: agent.workItemId,
+      workItemTitle: agent.workItemTitle,
+      message: `Marked as done in ${agent.workItemSource}`,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    appendEvent({
+      timestamp: new Date().toISOString(),
+      agent: agent.name,
+      event: "mark-done-failed",
+      workItemId: agent.workItemId,
+      workItemTitle: agent.workItemTitle,
+      message,
+    });
+  }
 }
 
 async function handleMaxRetriesExceeded(agent: Agent, providers: WorkItemProvider[]): Promise<void> {

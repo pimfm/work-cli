@@ -26,6 +26,7 @@ export async function dispatchToAgent(
     status: "provisioning",
     workItemId: item.id,
     workItemTitle: item.title,
+    workItemSource: item.source,
     branch,
     worktreePath: wtPath,
   });
@@ -91,7 +92,7 @@ export async function dispatchToAgent(
     child.stderr.pipe(logStream);
 
     // Mark as working with PID
-    agentStore.markBusy(agentName, item.id, item.title, branch, wtPath, child.pid!);
+    agentStore.markBusy(agentName, item.id, item.title, item.source, branch, wtPath, child.pid!);
 
     appendEvent({
       timestamp: new Date().toISOString(),
@@ -199,7 +200,7 @@ export async function retryAgent(
     id: agent.workItemId,
     title: agent.workItemTitle,
     labels: [],
-    source: "",
+    source: agent.workItemSource ?? "",
   };
 
   // Write CLAUDE.md
@@ -227,7 +228,7 @@ export async function retryAgent(
   child.stderr.pipe(logStream);
 
   // Mark as working with PID
-  store.markBusy(agentName, item.id, item.title, agent.branch, wtPath, child.pid!);
+  store.markBusy(agentName, item.id, item.title, item.source, agent.branch, wtPath, child.pid!);
 
   appendEvent({
     timestamp: new Date().toISOString(),

@@ -7,6 +7,7 @@ export interface Agent {
   status: AgentStatus;
   workItemId?: string;
   workItemTitle?: string;
+  workItemSource?: string;
   branch?: string;
   worktreePath?: string;
   pid?: number;

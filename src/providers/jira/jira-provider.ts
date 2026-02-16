@@ -79,4 +79,43 @@ export class JiraProvider implements WorkItemProvider {
       url: `${baseUrl}/browse/${issue.key}`,
     }));
   }
+
+  async markItemDone(itemId: string): Promise<void> {
+    const baseUrl = `https://${this.domain}.atlassian.net`;
+    const auth = Buffer.from(`${this.email}:${this.apiToken}`).toString("base64");
+    const headers = {
+      Authorization: `Basic ${auth}`,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    };
+
+    // Get available transitions for the issue
+    const transitionsRes = await fetch(`${baseUrl}/rest/api/3/issue/${itemId}/transitions`, {
+      headers,
+    });
+    if (!transitionsRes.ok) {
+      throw new Error(`Jira API error: ${transitionsRes.status} ${transitionsRes.statusText}`);
+    }
+
+    const transitionsJson = await transitionsRes.json() as {
+      transitions: { id: string; name: string; to: { statusCategory: { key: string } } }[];
+    };
+
+    const doneTransition = transitionsJson.transitions.find(
+      (t) => t.to.statusCategory.key === "done",
+    );
+    if (!doneTransition) {
+      throw new Error(`No transition to Done found for issue ${itemId}`);
+    }
+
+    // Execute the transition
+    const res = await fetch(`${baseUrl}/rest/api/3/issue/${itemId}/transitions`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ transition: { id: doneTransition.id } }),
+    });
+    if (!res.ok) {
+      throw new Error(`Jira API error: ${res.status} ${res.statusText}`);
+    }
+  }
 }

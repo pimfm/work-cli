@@ -51,6 +51,23 @@ export class TrelloProvider implements WorkItemProvider {
     }
   }
 
+  async markItemDone(itemId: string): Promise<void> {
+    const card = await this.get<{ idBoard: string }>(`/cards/${itemId}`, { fields: "idBoard" });
+    const lists = await this.get<TrelloList[]>(`/boards/${card.idBoard}/lists`, { fields: "id,name" });
+    const doneList = lists.find((l) => l.name.toLowerCase() === "done");
+    if (!doneList) {
+      throw new Error(`No "Done" list found on board ${card.idBoard}`);
+    }
+    const params = this.params();
+    params.set("idList", doneList.id);
+    const res = await fetch(`https://api.trello.com/1/cards/${itemId}?${params}`, {
+      method: "PUT",
+    });
+    if (!res.ok) {
+      throw new Error(`Trello API error: ${res.status} ${res.statusText}`);
+    }
+  }
+
   async fetchAssignedItems(): Promise<WorkItem[]> {
     const member = await this.get<TrelloMember>("/members/me");
     const allCards = await this.get<TrelloCard[]>(`/members/${member.id}/cards`, {

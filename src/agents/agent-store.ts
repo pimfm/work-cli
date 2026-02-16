@@ -94,12 +94,13 @@ export class AgentStore {
     return AGENT_NAMES.find((n) => this.data.agents[n].status === "idle");
   }
 
-  markBusy(name: AgentName, workItemId: string, workItemTitle: string, branch: string, worktreePath: string, pid: number): void {
+  markBusy(name: AgentName, workItemId: string, workItemTitle: string, workItemSource: string, branch: string, worktreePath: string, pid: number): void {
     this.data.agents[name] = {
       name,
       status: "working",
       workItemId,
       workItemTitle,
+      workItemSource,
       branch,
       worktreePath,
       pid,

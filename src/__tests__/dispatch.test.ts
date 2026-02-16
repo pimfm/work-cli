@@ -46,7 +46,7 @@ describe("Dispatch integration", () => {
     expect(store.getAgent("ember").status).toBe("idle");
 
     // Mark busy
-    store.markBusy("ember", "LIN-42", "Fix auth", "agent/ember/LIN-42", "/tmp/wt", process.pid);
+    store.markBusy("ember", "LIN-42", "Fix auth", "Linear", "agent/ember/LIN-42", "/tmp/wt", process.pid);
     const busy = store.getAgent("ember");
     expect(busy.status).toBe("working");
     expect(busy.workItemId).toBe("LIN-42");

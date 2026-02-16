@@ -103,6 +103,61 @@ export class LinearProvider implements WorkItemProvider {
       throw new Error(`Linear API error: ${res.status} ${res.statusText}`);
     }
   }
+
+  async markItemDone(itemId: string): Promise<void> {
+    // Look up internal UUID and team for the issue
+    const lookupQuery = `{
+      issues(filter: { identifier: { eq: "${itemId}" } }, first: 1) {
+        nodes { id team { states { nodes { id type } } } }
+      }
+    }`;
+
+    const lookupRes = await this.graphql<{
+      data?: {
+        issues: {
+          nodes: {
+            id: string;
+            team: { states: { nodes: { id: string; type: string }[] } };
+          }[];
+        };
+      };
+    }>(lookupQuery);
+
+    const issue = lookupRes.data?.issues.nodes[0];
+    if (!issue) {
+      throw new Error(`Linear issue not found: ${itemId}`);
+    }
+
+    const doneState = issue.team.states.nodes.find((s) => s.type === "completed");
+    if (!doneState) {
+      throw new Error(`No completed state found for issue ${itemId}`);
+    }
+
+    const mutation = `mutation {
+      issueUpdate(id: "${issue.id}", input: { stateId: "${doneState.id}" }) {
+        success
+      }
+    }`;
+
+    await this.graphql(mutation);
+  }
+
+  private async graphql<T = unknown>(query: string): Promise<T> {
+    const res = await fetch("https://api.linear.app/graphql", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: this.apiKey,
+      },
+      body: JSON.stringify({ query }),
+    });
+
+    if (!res.ok) {
+      throw new Error(`Linear API error: ${res.status} ${res.statusText}`);
+    }
+
+    return res.json() as Promise<T>;
+  }
 }
 
 function priorityLabel(priority: number): string {
