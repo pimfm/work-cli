@@ -124,7 +124,7 @@ function Dashboard({
     if (item) dispatchItem(item);
   }, [items, dispatchItem]);
 
-  const { selectedIndex, mode, breadcrumbs, canGoBack, agentSelectedIndex, expandedAgent, agentSubMode, detailScrollOffset } = useNavigation(items.length, { onEnter, onComplete, onDispatch, onRefresh });
+  const { selectedIndex, mode, breadcrumbs, forwardBreadcrumbs, canGoBack, canGoForward, agentSelectedIndex, expandedAgent, agentSubMode, detailScrollOffset } = useNavigation(items.length, { onEnter, onComplete, onDispatch, onRefresh });
   selectedRef.current = selectedIndex;
   const sources = [...new Set(items.map((i) => i.source))].join(" | ");
   const selectedItem = items[selectedIndex]!;
@@ -134,10 +134,10 @@ function Dashboard({
       <Box paddingX={1} justifyContent="space-between">
         <Box>
           <Text bold> work pipeline</Text>
-          {canGoBack && (
+          {(canGoBack || canGoForward) && (
             <>
               <Text dimColor>  </Text>
-              <Breadcrumb items={breadcrumbs} />
+              <Breadcrumb items={breadcrumbs} forwardItems={forwardBreadcrumbs} />
             </>
           )}
         </Box>
@@ -177,7 +177,7 @@ function Dashboard({
         </Box>
       )}
 
-      <Footer canGoBack={canGoBack} mode={mode} agentSubMode={agentSubMode} />
+      <Footer canGoBack={canGoBack} canGoForward={canGoForward} mode={mode} agentSubMode={agentSubMode} />
     </Box>
   );
 }

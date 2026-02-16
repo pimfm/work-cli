@@ -3,10 +3,12 @@ import { Text } from "ink";
 
 interface Props {
   items: string[];
+  forwardItems?: string[];
 }
 
-export function Breadcrumb({ items }: Props) {
-  if (items.length <= 1) return null;
+export function Breadcrumb({ items, forwardItems = [] }: Props) {
+  const hasForward = forwardItems.length > 0;
+  if (items.length <= 1 && !hasForward) return null;
 
   return (
     <Text>
@@ -23,6 +25,12 @@ export function Breadcrumb({ items }: Props) {
           </Text>
         );
       })}
+      {forwardItems.map((item, i) => (
+        <Text key={`fwd-${i}`}>
+          <Text dimColor> &gt; </Text>
+          <Text dimColor strikethrough>{item}</Text>
+        </Text>
+      ))}
     </Text>
   );
 }
