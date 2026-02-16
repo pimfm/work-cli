@@ -12,9 +12,45 @@ export class JiraProvider implements WorkItemProvider {
     private apiToken: string,
   ) {}
 
+  private authHeaders(): Record<string, string> {
+    const auth = Buffer.from(`${this.email}:${this.apiToken}`).toString("base64");
+    return {
+      Authorization: `Basic ${auth}`,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    };
+  }
+
+  async markDone(item: WorkItem): Promise<void> {
+    const baseUrl = `https://${this.domain}.atlassian.net`;
+
+    const transRes = await fetch(`${baseUrl}/rest/api/3/issue/${item.id}/transitions`, {
+      headers: this.authHeaders(),
+    });
+    if (!transRes.ok) {
+      throw new Error(`Jira API error: ${transRes.status} ${transRes.statusText}`);
+    }
+
+    const transJson = await transRes.json() as { transitions: { id: string; name: string; to: { statusCategory: { key: string } } }[] };
+    const doneTrans = transJson.transitions.find(
+      (t) => t.to.statusCategory.key === "done",
+    );
+    if (!doneTrans) {
+      throw new Error(`No 'Done' transition available for ${item.id}`);
+    }
+
+    const res = await fetch(`${baseUrl}/rest/api/3/issue/${item.id}/transitions`, {
+      method: "POST",
+      headers: this.authHeaders(),
+      body: JSON.stringify({ transition: { id: doneTrans.id } }),
+    });
+    if (!res.ok) {
+      throw new Error(`Jira API error: ${res.status} ${res.statusText}`);
+    }
+  }
+
   async addComment(itemId: string, comment: string): Promise<void> {
     const baseUrl = `https://${this.domain}.atlassian.net`;
-    const auth = Buffer.from(`${this.email}:${this.apiToken}`).toString("base64");
 
     const body = {
       body: {
@@ -31,11 +67,7 @@ export class JiraProvider implements WorkItemProvider {
 
     const res = await fetch(`${baseUrl}/rest/api/3/issue/${itemId}/comment`, {
       method: "POST",
-      headers: {
-        Authorization: `Basic ${auth}`,
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
+      headers: this.authHeaders(),
       body: JSON.stringify(body),
     });
 
@@ -46,7 +78,6 @@ export class JiraProvider implements WorkItemProvider {
 
   async fetchAssignedItems(): Promise<WorkItem[]> {
     const baseUrl = `https://${this.domain}.atlassian.net`;
-    const auth = Buffer.from(`${this.email}:${this.apiToken}`).toString("base64");
 
     const params = new URLSearchParams({
       jql: "assignee = currentUser() AND statusCategory != Done ORDER BY priority ASC",
@@ -55,10 +86,7 @@ export class JiraProvider implements WorkItemProvider {
     });
 
     const res = await fetch(`${baseUrl}/rest/api/3/search?${params}`, {
-      headers: {
-        Authorization: `Basic ${auth}`,
-        Accept: "application/json",
-      },
+      headers: this.authHeaders(),
     });
 
     if (!res.ok) {

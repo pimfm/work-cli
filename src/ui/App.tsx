@@ -117,7 +117,12 @@ function Dashboard({
 
   const onComplete = useCallback(() => {
     stopTimer();
-  }, [stopTimer]);
+    const item = items[selectedRef.current];
+    if (!item) return;
+    const provider = providers.find((p) => p.name === item.source);
+    if (!provider?.markDone) return;
+    provider.markDone(item).then(() => onRefresh()).catch(() => {});
+  }, [stopTimer, items, providers, onRefresh]);
 
   const onDispatch = useCallback(() => {
     const item = items[selectedRef.current];

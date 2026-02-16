@@ -81,6 +81,19 @@ export class GitHubProvider implements WorkItemProvider {
   setBoardFilter(repoFullName: string): void {
     this.repoFilter = repoFullName;
   }
+
+  async markDone(item: WorkItem): Promise<void> {
+    const repo = item.team;
+    const issueNumber = item.id.replace(/^#/, "");
+    if (!repo || !issueNumber) {
+      throw new Error(`Cannot close GitHub issue: missing repo or issue number`);
+    }
+    try {
+      this.cli.run(["issue", "close", issueNumber, "--repo", repo]);
+    } catch {
+      throw new Error(`Failed to close GitHub issue ${item.id}`);
+    }
+  }
 }
 
 function mapIssueToWorkItem(issue: GhIssue): WorkItem {
