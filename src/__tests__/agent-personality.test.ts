@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, readFileSync, rmSync } from "fs";
+import { mkdtempSync, rmSync, readFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { AGENT_NAMES } from "../model/agent.js";
@@ -66,10 +66,10 @@ describe("agent personalities", () => {
     });
 
     it("still includes agent identity", () => {
-      writeClaudeMd(tmpDir, "Tide");
+      writeClaudeMd(tmpDir, "Flow");
       const content = readFileSync(join(tmpDir, "CLAUDE.md"), "utf-8");
 
-      expect(content).toContain("You are **Tide**");
+      expect(content).toContain("You are **Flow**");
     });
   });
 
@@ -82,7 +82,7 @@ describe("agent personalities", () => {
     };
 
     it("includes personality tagline in opening line", () => {
-      const prompt = buildClaudePrompt(item, "Tide");
+      const prompt = buildClaudePrompt(item, "Flow");
       expect(prompt).toContain("Your personality: Steady and thorough.");
     });
 

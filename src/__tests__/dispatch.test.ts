@@ -34,8 +34,8 @@ describe("Dispatch integration", () => {
   });
 
   it("computes worktree path as sibling", () => {
-    const path = worktreePath("/Users/pim/fm/workflow/main", "tide");
-    expect(path).toBe("/Users/pim/fm/workflow/agent-tide");
+    const path = worktreePath("/Users/pim/fm/workflow/main", "flow");
+    expect(path).toBe("/Users/pim/fm/workflow/agent-flow");
   });
 
   it("agent store tracks full dispatch lifecycle", () => {
@@ -53,7 +53,7 @@ describe("Dispatch integration", () => {
     expect(busy.pid).toBe(process.pid);
 
     // Next free agent should skip ember
-    expect(store.getNextFreeAgent()).toBe("tide");
+    expect(store.getNextFreeAgent()).toBe("flow");
 
     // Mark done
     store.markDone("ember");

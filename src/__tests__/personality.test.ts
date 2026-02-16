@@ -44,13 +44,13 @@ describe("Agent personalities", () => {
       expect(prompt).toContain("Move fast, ship clean");
     });
 
-    it("includes personality tagline for tide", () => {
-      const prompt = buildClaudePrompt(item, "Tide");
+    it("includes personality tagline for flow", () => {
+      const prompt = buildClaudePrompt(item, "Flow");
       expect(prompt).toContain("Steady and thorough");
     });
 
-    it("includes personality tagline for gale", () => {
-      const prompt = buildClaudePrompt(item, "Gale");
+    it("includes personality tagline for tempest", () => {
+      const prompt = buildClaudePrompt(item, "Tempest");
       expect(prompt).toContain("Creative problem solver");
     });
 
@@ -78,14 +78,14 @@ describe("Agent personalities", () => {
       expect(content).toContain("speed and pragmatism");
     });
 
-    it("includes personality system prompt for tide", () => {
-      writeClaudeMd(tmpDir, "Tide");
+    it("includes personality system prompt for flow", () => {
+      writeClaudeMd(tmpDir, "Flow");
       const content = readFileSync(join(tmpDir, "CLAUDE.md"), "utf-8");
       expect(content).toContain("correctness and thoroughness");
     });
 
-    it("includes personality system prompt for gale", () => {
-      writeClaudeMd(tmpDir, "Gale");
+    it("includes personality system prompt for tempest", () => {
+      writeClaudeMd(tmpDir, "Tempest");
       const content = readFileSync(join(tmpDir, "CLAUDE.md"), "utf-8");
       expect(content).toContain("elegant patterns");
     });

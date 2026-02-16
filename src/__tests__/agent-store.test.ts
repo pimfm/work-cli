@@ -22,7 +22,7 @@ describe("AgentStore", () => {
     const agents = store.getAll();
     expect(agents).toHaveLength(4);
     expect(agents.every((a) => a.status === "idle")).toBe(true);
-    expect(agents.map((a) => a.name)).toEqual(["ember", "tide", "gale", "terra"]);
+    expect(agents.map((a) => a.name)).toEqual(["ember", "flow", "tempest", "terra"]);
   });
 
   it("returns next free agent in order", () => {
@@ -33,14 +33,14 @@ describe("AgentStore", () => {
   it("skips busy agents when finding next free", () => {
     const store = new AgentStore(storePath);
     store.markBusy("ember", "item-1", "Task 1", "branch/1", "/tmp/wt1", 99999);
-    expect(store.getNextFreeAgent()).toBe("tide");
+    expect(store.getNextFreeAgent()).toBe("flow");
   });
 
   it("returns undefined when all agents are busy", () => {
     const store = new AgentStore(storePath);
     store.markBusy("ember", "1", "T1", "b/1", "/tmp/1", 99999);
-    store.markBusy("tide", "2", "T2", "b/2", "/tmp/2", 99999);
-    store.markBusy("gale", "3", "T3", "b/3", "/tmp/3", 99999);
+    store.markBusy("flow", "2", "T2", "b/2", "/tmp/2", 99999);
+    store.markBusy("tempest", "3", "T3", "b/3", "/tmp/3", 99999);
     store.markBusy("terra", "4", "T4", "b/4", "/tmp/4", 99999);
     expect(store.getNextFreeAgent()).toBeUndefined();
   });
@@ -57,19 +57,19 @@ describe("AgentStore", () => {
 
   it("marks agent as error", () => {
     const store = new AgentStore(storePath);
-    store.markBusy("tide", "item-2", "Task 2", "branch/2", "/tmp/wt2", 99999);
-    store.markError("tide", "Process crashed");
-    const agent = store.getAgent("tide");
+    store.markBusy("flow", "item-2", "Task 2", "branch/2", "/tmp/wt2", 99999);
+    store.markError("flow", "Process crashed");
+    const agent = store.getAgent("flow");
     expect(agent.status).toBe("error");
     expect(agent.error).toBe("Process crashed");
   });
 
   it("releases agent back to idle", () => {
     const store = new AgentStore(storePath);
-    store.markBusy("gale", "item-3", "Task 3", "branch/3", "/tmp/wt3", 99999);
-    store.markDone("gale");
-    store.release("gale");
-    const agent = store.getAgent("gale");
+    store.markBusy("tempest", "item-3", "Task 3", "branch/3", "/tmp/wt3", 99999);
+    store.markDone("tempest");
+    store.release("tempest");
+    const agent = store.getAgent("tempest");
     expect(agent.status).toBe("idle");
     expect(agent.workItemId).toBeUndefined();
   });

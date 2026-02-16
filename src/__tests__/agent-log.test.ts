@@ -52,16 +52,16 @@ describe("agent-log", () => {
 
   it("filters events by agent name", () => {
     appendEvent(makeEvent({ agent: "ember", event: "dispatched" }));
-    appendEvent(makeEvent({ agent: "tide", event: "dispatched" }));
+    appendEvent(makeEvent({ agent: "flow", event: "dispatched" }));
     appendEvent(makeEvent({ agent: "ember", event: "working" }));
 
     const emberEvents = readEvents("ember");
     expect(emberEvents).toHaveLength(2);
     expect(emberEvents.every((e) => e.agent === "ember")).toBe(true);
 
-    const tideEvents = readEvents("tide");
-    expect(tideEvents).toHaveLength(1);
-    expect(tideEvents[0]!.agent).toBe("tide");
+    const flowEvents = readEvents("flow");
+    expect(flowEvents).toHaveLength(1);
+    expect(flowEvents[0]!.agent).toBe("flow");
   });
 
   it("limits returned events to most recent N", () => {
@@ -76,13 +76,13 @@ describe("agent-log", () => {
   });
 
   it("readEventsForAgent is a convenience wrapper", () => {
-    appendEvent(makeEvent({ agent: "gale", event: "error", message: "fail" }));
+    appendEvent(makeEvent({ agent: "tempest", event: "error", message: "fail" }));
     appendEvent(makeEvent({ agent: "ember", event: "done" }));
 
-    const galeEvents = readEventsForAgent("gale");
-    expect(galeEvents).toHaveLength(1);
-    expect(galeEvents[0]!.agent).toBe("gale");
-    expect(galeEvents[0]!.event).toBe("error");
+    const tempestEvents = readEventsForAgent("tempest");
+    expect(tempestEvents).toHaveLength(1);
+    expect(tempestEvents[0]!.agent).toBe("tempest");
+    expect(tempestEvents[0]!.event).toBe("error");
   });
 
   it("writes valid JSON lines", () => {

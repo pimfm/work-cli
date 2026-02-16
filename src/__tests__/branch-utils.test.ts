@@ -30,8 +30,8 @@ describe("branchName", () => {
   });
 
   it("truncates long item IDs to 8 chars", () => {
-    const result = branchName("tide", "1234567890abcdef", "Short title");
-    expect(result).toBe("agent/tide/12345678-short-title");
+    const result = branchName("flow", "1234567890abcdef", "Short title");
+    expect(result).toBe("agent/flow/12345678-short-title");
   });
 });
 

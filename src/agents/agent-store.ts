@@ -16,8 +16,8 @@ function defaultData(): StoreData {
   return {
     agents: {
       ember: defaultAgent("ember"),
-      tide: defaultAgent("tide"),
-      gale: defaultAgent("gale"),
+      flow: defaultAgent("flow"),
+      tempest: defaultAgent("tempest"),
       terra: defaultAgent("terra"),
     },
   };

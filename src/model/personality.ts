@@ -17,7 +17,7 @@ export const PERSONALITIES: Record<AgentName, AgentPersonality> = {
       "Keep PRs small and focused — one concern per change.",
     ].join("\n"),
   },
-  tide: {
+  flow: {
     tagline: "Steady and thorough",
     traits: ["methodical", "detail-oriented", "quality-focused"],
     systemPrompt: [
@@ -27,7 +27,7 @@ export const PERSONALITIES: Record<AgentName, AgentPersonality> = {
       "Take the time to understand the full context before making changes.",
     ].join("\n"),
   },
-  gale: {
+  tempest: {
     tagline: "Creative problem solver",
     traits: ["inventive", "exploratory", "pattern-seeking"],
     systemPrompt: [
