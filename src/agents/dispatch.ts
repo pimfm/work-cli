@@ -42,8 +42,26 @@ export async function dispatchToAgent(
     // Fetch latest main from origin
     execSync("git fetch origin main", { cwd: repoRoot, stdio: "pipe" });
 
-    // Create branch from origin/main
-    execSync(`git branch ${branch} origin/main`, { cwd: repoRoot, stdio: "pipe" });
+    // Clean up existing worktree if it exists
+    if (existsSync(wtPath)) {
+      try {
+        execSync(`git worktree remove ${wtPath} --force`, { cwd: repoRoot, stdio: "pipe" });
+      } catch {
+        rmSync(wtPath, { recursive: true, force: true });
+        try {
+          execSync("git worktree prune", { cwd: repoRoot, stdio: "pipe" });
+        } catch {
+          // ignore prune errors
+        }
+      }
+    }
+
+    // Create or reset branch from origin/main
+    try {
+      execSync(`git branch ${branch} origin/main`, { cwd: repoRoot, stdio: "pipe" });
+    } catch {
+      execSync(`git branch -f ${branch} origin/main`, { cwd: repoRoot, stdio: "pipe" });
+    }
 
     // Create worktree
     execSync(`git worktree add ${wtPath} ${branch}`, { cwd: repoRoot, stdio: "pipe" });
