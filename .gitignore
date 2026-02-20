@@ -1,6 +1,2 @@
-node_modules/
-dist/
-.idea/
-
-### Mac OS ###
+/target
 .DS_Store
