@@ -11,7 +11,9 @@ struct MockProvider {
     provider_name: String,
     done_ids: Arc<Mutex<Vec<String>>>,
     in_progress_ids: Arc<Mutex<Vec<String>>>,
+    created_items: Arc<Mutex<Vec<(String, Option<String>)>>>,
     should_fail: bool,
+    supports_create: bool,
 }
 
 impl MockProvider {
@@ -20,12 +22,19 @@ impl MockProvider {
             provider_name: name.to_string(),
             done_ids: Arc::new(Mutex::new(Vec::new())),
             in_progress_ids: Arc::new(Mutex::new(Vec::new())),
+            created_items: Arc::new(Mutex::new(Vec::new())),
             should_fail: false,
+            supports_create: false,
         }
     }
 
     fn with_failure(mut self) -> Self {
         self.should_fail = true;
+        self
+    }
+
+    fn with_create_support(mut self) -> Self {
+        self.supports_create = true;
         self
     }
 }
@@ -61,6 +70,36 @@ impl Provider for MockProvider {
             .unwrap()
             .push(source_id.to_string());
         Ok(())
+    }
+
+    async fn create_item(
+        &self,
+        title: &str,
+        description: Option<&str>,
+    ) -> Result<Option<WorkItem>> {
+        if !self.supports_create {
+            return Ok(None);
+        }
+        if self.should_fail {
+            anyhow::bail!("Mock create failure");
+        }
+        self.created_items
+            .lock()
+            .unwrap()
+            .push((title.to_string(), description.map(String::from)));
+
+        Ok(Some(WorkItem {
+            id: format!("MOCK-1"),
+            source_id: Some("mock-source-id".to_string()),
+            title: title.to_string(),
+            description: description.map(String::from),
+            status: Some("Todo".to_string()),
+            priority: None,
+            labels: Vec::new(),
+            source: self.provider_name.clone(),
+            team: None,
+            url: Some("https://mock.test/item/1".to_string()),
+        }))
     }
 }
 
@@ -215,4 +254,162 @@ fn work_item_serialization_without_source_id() {
     let json_no_source_id = r#"{"id":"abc","title":"Test","labels":[],"source":"Trello"}"#;
     let deserialized: WorkItem = serde_json::from_str(json_no_source_id).unwrap();
     assert_eq!(deserialized.source_id, None);
+}
+
+// --- create_item tests ---
+
+#[tokio::test]
+async fn create_item_default_returns_none() {
+    struct NoopProvider;
+
+    #[async_trait]
+    impl Provider for NoopProvider {
+        fn name(&self) -> &str {
+            "Noop"
+        }
+        async fn fetch_items(&self) -> Result<Vec<WorkItem>> {
+            Ok(vec![])
+        }
+        async fn list_boards(&self) -> Result<Vec<BoardInfo>> {
+            Ok(vec![])
+        }
+    }
+
+    let provider = NoopProvider;
+    let result = provider.create_item("Test task", None).await.unwrap();
+    assert!(result.is_none());
+}
+
+#[tokio::test]
+async fn create_item_with_mock_provider() {
+    let provider = MockProvider::new("TestProvider").with_create_support();
+    let created = provider.created_items.clone();
+
+    let result = provider
+        .create_item("New feature", Some("Build it fast"))
+        .await
+        .unwrap();
+
+    assert!(result.is_some());
+    let item = result.unwrap();
+    assert_eq!(item.title, "New feature");
+    assert_eq!(item.description, Some("Build it fast".to_string()));
+    assert_eq!(item.source, "TestProvider");
+    assert!(item.url.is_some());
+
+    let items = created.lock().unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].0, "New feature");
+    assert_eq!(items[0].1, Some("Build it fast".to_string()));
+}
+
+#[tokio::test]
+async fn create_item_without_description() {
+    let provider = MockProvider::new("TestProvider").with_create_support();
+    let created = provider.created_items.clone();
+
+    let result = provider.create_item("Simple task", None).await.unwrap();
+    assert!(result.is_some());
+
+    let items = created.lock().unwrap();
+    assert_eq!(items[0].1, None);
+}
+
+#[tokio::test]
+async fn create_item_propagates_errors() {
+    let provider = MockProvider::new("FailProvider")
+        .with_create_support()
+        .with_failure();
+
+    let result = provider.create_item("Will fail", None).await;
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("Mock create failure"));
+}
+
+#[tokio::test]
+async fn create_item_unsupported_provider_returns_none() {
+    // Provider without create support should return None, not error
+    let provider = MockProvider::new("NoCreate");
+    let result = provider.create_item("Test", None).await.unwrap();
+    assert!(result.is_none());
+}
+
+#[tokio::test]
+async fn create_item_tries_providers_in_order() {
+    // Simulate the app logic: try each provider until one works
+    let providers: Vec<Box<dyn Provider>> = vec![
+        Box::new(MockProvider::new("NoCreate1")),     // Doesn't support create
+        Box::new(MockProvider::new("NoCreate2")),     // Doesn't support create
+        Box::new(MockProvider::new("Creator").with_create_support()), // Supports create
+    ];
+
+    let mut created = false;
+    for provider in &providers {
+        match provider.create_item("Test task", None).await {
+            Ok(Some(item)) => {
+                assert_eq!(item.source, "Creator");
+                created = true;
+                break;
+            }
+            Ok(None) => continue,
+            Err(_) => break,
+        }
+    }
+
+    assert!(created, "Should have created an item via the Creator provider");
+}
+
+#[tokio::test]
+async fn create_item_skips_failing_provider() {
+    let providers: Vec<Box<dyn Provider>> = vec![
+        Box::new(MockProvider::new("Broken").with_create_support().with_failure()),
+        Box::new(MockProvider::new("Working").with_create_support()),
+    ];
+
+    let mut result_item = None;
+    for provider in &providers {
+        match provider.create_item("Test", None).await {
+            Ok(Some(item)) => {
+                result_item = Some(item);
+                break;
+            }
+            Ok(None) => continue,
+            Err(_) => continue, // Skip broken provider
+        }
+    }
+
+    let item = result_item.expect("Should have fallen through to Working provider");
+    assert_eq!(item.source, "Working");
+}
+
+#[test]
+fn create_item_result_has_correct_fields() {
+    // Verify WorkItem structure for a created item
+    let item = WorkItem {
+        id: "TRE-123".to_string(),
+        source_id: Some("full-trello-id".to_string()),
+        title: "My new task".to_string(),
+        description: Some("Detailed description".to_string()),
+        status: Some("Todo".to_string()),
+        priority: None,
+        labels: vec!["feature".to_string()],
+        source: "Trello".to_string(),
+        team: Some("My Board".to_string()),
+        url: Some("https://trello.com/c/abc123".to_string()),
+    };
+
+    let json = serde_json::to_string(&item).unwrap();
+    let deserialized: WorkItem = serde_json::from_str(&json).unwrap();
+
+    assert_eq!(deserialized.id, "TRE-123");
+    assert_eq!(deserialized.source_id, Some("full-trello-id".to_string()));
+    assert_eq!(deserialized.title, "My new task");
+    assert_eq!(
+        deserialized.description,
+        Some("Detailed description".to_string())
+    );
+    assert_eq!(deserialized.status, Some("Todo".to_string()));
+    assert_eq!(deserialized.labels, vec!["feature"]);
+    assert_eq!(deserialized.source, "Trello");
+    assert_eq!(deserialized.url, Some("https://trello.com/c/abc123".to_string()));
 }

@@ -1,5 +1,6 @@
 mod agents;
 mod app;
+mod cli;
 mod config;
 mod event;
 mod model;
@@ -22,6 +23,19 @@ use app::{Action, App};
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Check for CLI subcommands before launching TUI
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() > 1 {
+        match args[1].as_str() {
+            "add" => return cli::handle_add(&args[2..]).await,
+            "help" | "--help" | "-h" => {
+                cli::print_help();
+                return Ok(());
+            }
+            _ => {} // Unknown subcommand — fall through to TUI
+        }
+    }
+
     // Load config
     let config = config::load_config()?;
 

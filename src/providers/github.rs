@@ -102,6 +102,82 @@ impl Provider for GitHubProvider {
         Ok(vec![])
     }
 
+    async fn create_item(
+        &self,
+        title: &str,
+        description: Option<&str>,
+    ) -> Result<Option<WorkItem>> {
+        // Detect the current repo using gh
+        let repo_output = tokio::process::Command::new("gh")
+            .args(["repo", "view", "--json", "nameWithOwner"])
+            .output()
+            .await
+            .context("Failed to run gh CLI to detect repo")?;
+
+        if !repo_output.status.success() {
+            // Not in a git repo or gh not configured — skip
+            return Ok(None);
+        }
+
+        let repo_info: serde_json::Value =
+            serde_json::from_slice(&repo_output.stdout).context("Failed to parse gh repo view")?;
+        let repo = repo_info
+            .get("nameWithOwner")
+            .and_then(|v| v.as_str())
+            .context("No nameWithOwner in gh repo view output")?;
+
+        // Build the gh issue create command
+        let mut cmd_args = vec![
+            "issue".to_string(),
+            "create".to_string(),
+            "--repo".to_string(),
+            repo.to_string(),
+            "--title".to_string(),
+            title.to_string(),
+        ];
+
+        if let Some(desc) = description {
+            cmd_args.push("--body".to_string());
+            cmd_args.push(desc.to_string());
+        }
+
+        let output = tokio::process::Command::new("gh")
+            .args(&cmd_args)
+            .output()
+            .await
+            .context("Failed to run gh issue create")?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            anyhow::bail!("gh issue create failed: {stderr}");
+        }
+
+        // gh issue create outputs the URL of the new issue
+        let url = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
+        // Extract the issue number from the URL (e.g., https://github.com/owner/repo/issues/42)
+        let number = url
+            .rsplit('/')
+            .next()
+            .unwrap_or("?")
+            .to_string();
+
+        let item = WorkItem {
+            id: format!("#{number}"),
+            source_id: Some(url.clone()),
+            title: title.to_string(),
+            description: description.map(|d| d.chars().take(500).collect()),
+            status: Some("open".to_string()),
+            priority: None,
+            labels: Vec::new(),
+            source: "GitHub".into(),
+            team: Some(repo.to_string()),
+            url: Some(url),
+        };
+
+        Ok(Some(item))
+    }
+
     async fn move_to_done(&self, source_id: &str) -> Result<()> {
         // source_id is the issue URL, close it via gh CLI
         let output = tokio::process::Command::new("gh")
