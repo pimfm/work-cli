@@ -1,10 +1,14 @@
 use anyhow::{Context, Result};
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::config::data_dir;
 use crate::model::agent::{Agent, AgentName, AgentStatus};
+
+/// Max seconds an agent can stay in Provisioning before being marked Error.
+const PROVISIONING_TIMEOUT_SECS: i64 = 60;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct StoreData {
@@ -51,12 +55,29 @@ impl AgentStore {
     }
 
     fn clean_stale_processes(&mut self) {
+        let now = Utc::now();
         for agent in self.data.agents.values_mut() {
+            // Detect dead processes
             if let Some(pid) = agent.pid {
                 if !is_process_alive(pid) {
                     agent.status = AgentStatus::Error;
                     agent.error = Some("Process exited unexpectedly".into());
                     agent.pid = None;
+                }
+            }
+            // Detect stuck provisioning (no PID, been provisioning too long)
+            if agent.status == AgentStatus::Provisioning && agent.pid.is_none() {
+                if let Some(ref started) = agent.started_at {
+                    if let Ok(started_at) = chrono::DateTime::parse_from_rfc3339(started) {
+                        let elapsed = now.signed_duration_since(started_at);
+                        if elapsed.num_seconds() > PROVISIONING_TIMEOUT_SECS {
+                            agent.status = AgentStatus::Error;
+                            agent.error = Some(format!(
+                                "Provisioning timed out after {}s",
+                                elapsed.num_seconds()
+                            ));
+                        }
+                    }
                 }
             }
         }

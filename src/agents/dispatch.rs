@@ -1,7 +1,10 @@
 use anyhow::{Context, Result};
 use std::path::Path;
 use std::process::Stdio;
+use std::time::Duration;
 use tokio::sync::mpsc;
+
+const GIT_TIMEOUT: Duration = Duration::from_secs(30);
 
 use super::branch::{branch_name, worktree_path};
 use super::claude_md::write_claude_md;
@@ -32,6 +35,35 @@ pub async fn dispatch(
         None,
     ));
 
+    // Run provisioning steps — if anything fails, mark agent as Error
+    match provision_and_spawn(agent_name, item, repo_root, &branch, &wt_path, action_tx).await {
+        Ok(pid) => {
+            store.mark_working(agent_name, pid)?;
+            Ok(())
+        }
+        Err(e) => {
+            let msg = format!("Provisioning failed: {e}");
+            let _ = append_event(&new_event(
+                agent_name,
+                "error",
+                Some(&item.id),
+                Some(&item.title),
+                Some(&msg),
+            ));
+            store.mark_error(agent_name, &msg)?;
+            Err(e)
+        }
+    }
+}
+
+async fn provision_and_spawn(
+    agent_name: AgentName,
+    item: &WorkItem,
+    repo_root: &str,
+    branch: &str,
+    wt_path: &str,
+    action_tx: mpsc::UnboundedSender<Action>,
+) -> Result<u32> {
     // Git operations
     let _ = append_event(&new_event(
         agent_name,
@@ -43,25 +75,25 @@ pub async fn dispatch(
     run_git(repo_root, &["fetch", "origin", "main"]).await?;
 
     // Clean up existing worktree
-    let wt = Path::new(&wt_path);
+    let wt = Path::new(wt_path);
     if wt.exists() {
-        let _ = run_git(repo_root, &["worktree", "remove", &wt_path, "--force"]).await;
+        let _ = run_git(repo_root, &["worktree", "remove", wt_path, "--force"]).await;
         if wt.exists() {
-            tokio::fs::remove_dir_all(&wt_path).await.ok();
+            tokio::fs::remove_dir_all(wt_path).await.ok();
         }
     }
     let _ = run_git(repo_root, &["worktree", "prune"]).await;
 
     // Create branch (force if exists)
-    if run_git(repo_root, &["branch", &branch, "origin/main"])
+    if run_git(repo_root, &["branch", branch, "origin/main"])
         .await
         .is_err()
     {
-        run_git(repo_root, &["branch", "-f", &branch, "origin/main"]).await?;
+        run_git(repo_root, &["branch", "-f", branch, "origin/main"]).await?;
     }
 
     // Create worktree
-    run_git(repo_root, &["worktree", "add", &wt_path, &branch]).await?;
+    run_git(repo_root, &["worktree", "add", wt_path, branch]).await?;
 
     let _ = append_event(&new_event(
         agent_name,
@@ -72,7 +104,7 @@ pub async fn dispatch(
     ));
 
     // Write CLAUDE.md
-    write_claude_md(Path::new(&wt_path), agent_name)?;
+    write_claude_md(Path::new(wt_path), agent_name)?;
 
     // Build prompt
     let prompt = build_prompt(item, agent_name);
@@ -86,7 +118,7 @@ pub async fn dispatch(
     // Spawn claude process
     let child = tokio::process::Command::new("claude")
         .args(["-p", &prompt, "--dangerously-skip-permissions"])
-        .current_dir(&wt_path)
+        .current_dir(wt_path)
         .stdin(Stdio::null())
         .stdout(Stdio::from(log_file.try_clone()?))
         .stderr(Stdio::from(log_file))
@@ -94,7 +126,6 @@ pub async fn dispatch(
         .context("Failed to spawn claude")?;
 
     let pid = child.id().unwrap_or(0);
-    store.mark_working(agent_name, pid)?;
     let _ = append_event(&new_event(
         agent_name,
         "working",
@@ -144,16 +175,20 @@ pub async fn dispatch(
         }
     });
 
-    Ok(())
+    Ok(pid)
 }
 
 async fn run_git(cwd: &str, args: &[&str]) -> Result<()> {
-    let output = tokio::process::Command::new("git")
-        .args(args)
-        .current_dir(cwd)
-        .output()
-        .await
-        .with_context(|| format!("Failed to run git {}", args.join(" ")))?;
+    let output = tokio::time::timeout(
+        GIT_TIMEOUT,
+        tokio::process::Command::new("git")
+            .args(args)
+            .current_dir(cwd)
+            .output(),
+    )
+    .await
+    .with_context(|| format!("git {} timed out after {}s", args.join(" "), GIT_TIMEOUT.as_secs()))?
+    .with_context(|| format!("Failed to run git {}", args.join(" ")))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
