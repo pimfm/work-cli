@@ -65,6 +65,13 @@ async fn main() -> Result<()> {
 
     // Main loop
     loop {
+        // Show/hide cursor based on input mode
+        if app.input_active {
+            terminal.show_cursor()?;
+        } else {
+            terminal.hide_cursor()?;
+        }
+
         // Render
         terminal.draw(|f| ui::render(f, &app))?;
 

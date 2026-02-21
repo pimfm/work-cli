@@ -23,6 +23,7 @@ pub fn render(f: &mut Frame, area: Rect, app: &App) {
             spans.push(hint("d", "dispatch"));
             spans.push(hint("m", "auto mode"));
             spans.push(hint("r", "refresh"));
+            spans.push(hint(":", "command"));
             spans.push(hint("q", "quit"));
         }
         ViewMode::Agents => {
@@ -30,6 +31,7 @@ pub fn render(f: &mut Frame, area: Rect, app: &App) {
             spans.push(hint("→", "detail"));
             spans.push(hint("←", "items"));
             spans.push(hint("c", "clear agent"));
+            spans.push(hint(":", "command"));
             spans.push(hint("q", "quit"));
         }
         ViewMode::AgentDetail(_) => {
@@ -37,6 +39,7 @@ pub fn render(f: &mut Frame, area: Rect, app: &App) {
             spans.push(hint("←", "agents"));
             spans.push(hint("c", "clear agent"));
             spans.push(hint("x", "clear logs"));
+            spans.push(hint(":", "command"));
             spans.push(hint("q", "quit"));
         }
     }

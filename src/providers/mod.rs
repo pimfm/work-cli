@@ -27,6 +27,10 @@ pub trait Provider: Send + Sync {
     async fn move_to_in_progress(&self, _source_id: &str) -> Result<()> {
         Ok(())
     }
+    /// Create a new work item in the provider. Returns None if provider doesn't support creation.
+    async fn create_item(&self, _title: &str, _description: Option<&str>) -> Result<Option<WorkItem>> {
+        Ok(None)
+    }
 }
 
 #[cfg(test)]

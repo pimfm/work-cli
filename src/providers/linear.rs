@@ -215,6 +215,87 @@ impl Provider for LinearProvider {
         Ok(())
     }
 
+    async fn create_item(&self, title: &str, description: Option<&str>) -> Result<Option<WorkItem>> {
+        // First get the viewer's first team
+        let team_query = r#"{ viewer { teams(first: 1) { nodes { id name } } } }"#;
+        let body = serde_json::json!({ "query": team_query });
+
+        let resp: serde_json::Value = self
+            .client
+            .post("https://api.linear.app/graphql")
+            .header("Authorization", &self.api_key)
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .await
+            .context("Linear API request failed")?
+            .json()
+            .await?;
+
+        let team_id = resp
+            .pointer("/data/viewer/teams/nodes/0/id")
+            .and_then(|v| v.as_str())
+            .context("No team found for Linear user")?
+            .to_string();
+
+        let team_name = resp
+            .pointer("/data/viewer/teams/nodes/0/name")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Unknown")
+            .to_string();
+
+        // Create the issue
+        let mutation = r#"mutation($title: String!, $teamId: String!, $description: String) {
+          issueCreate(input: { title: $title, teamId: $teamId, description: $description }) {
+            success
+            issue { id identifier title description url state { name } }
+          }
+        }"#;
+
+        let mut variables = serde_json::json!({
+            "title": title,
+            "teamId": team_id,
+        });
+        if let Some(desc) = description {
+            variables["description"] = serde_json::Value::String(desc.to_string());
+        }
+
+        let body = serde_json::json!({
+            "query": mutation,
+            "variables": variables,
+        });
+
+        let resp: serde_json::Value = self
+            .client
+            .post("https://api.linear.app/graphql")
+            .header("Authorization", &self.api_key)
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .await
+            .context("Failed to create Linear issue")?
+            .json()
+            .await?;
+
+        let issue = resp.pointer("/data/issueCreate/issue")
+            .context("No issue in create response")?;
+
+        let item = WorkItem {
+            id: issue.get("identifier").and_then(|v| v.as_str()).unwrap_or("?").to_string(),
+            source_id: issue.get("id").and_then(|v| v.as_str()).map(String::from),
+            title: title.to_string(),
+            description: description.map(String::from),
+            status: issue.pointer("/state/name").and_then(|v| v.as_str()).map(String::from),
+            priority: None,
+            labels: Vec::new(),
+            source: "Linear".into(),
+            team: Some(team_name),
+            url: issue.get("url").and_then(|v| v.as_str()).map(String::from),
+        };
+
+        Ok(Some(item))
+    }
+
     async fn move_to_in_progress(&self, source_id: &str) -> Result<()> {
         let query = r#"query($id: String!) {
           issue(id: $id) {

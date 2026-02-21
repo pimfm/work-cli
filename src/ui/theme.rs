@@ -55,6 +55,9 @@ pub fn event_color(event: &str) -> Color {
         "cleared" => Color::Magenta,
         "logs-cleared" => Color::DarkGray,
         "mode-change" => Color::Blue,
+        "user-message" => Color::White,
+        "agent-response" => Color::Cyan,
+        "task-created" => Color::Green,
         _ => Color::White,
     }
 }

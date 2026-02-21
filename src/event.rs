@@ -54,8 +54,12 @@ fn key_to_action(key: KeyEvent) -> Option<Action> {
         KeyCode::Char('r') => Some(Action::Key(KeyAction::Refresh)),
         KeyCode::Char('c') => Some(Action::Key(KeyAction::ClearAgent)),
         KeyCode::Char('x') => Some(Action::Key(KeyAction::ClearLogs)),
+        KeyCode::Char(':') => Some(Action::Key(KeyAction::ActivateInput)),
         KeyCode::Enter => Some(Action::Key(KeyAction::Select)),
-        KeyCode::Esc => Some(Action::Key(KeyAction::Left)),
+        KeyCode::Esc => Some(Action::Key(KeyAction::Escape)),
+        KeyCode::Char(c) => Some(Action::Key(KeyAction::Char(c))),
+        KeyCode::Backspace => Some(Action::Key(KeyAction::Backspace)),
+        KeyCode::Tab => Some(Action::Key(KeyAction::Tab)),
         _ => None,
     }
 }
@@ -67,9 +71,14 @@ pub enum KeyAction {
     Left,
     Right,
     Select,
+    Escape,
     Dispatch,
     ToggleAutoMode,
     Refresh,
     ClearAgent,
     ClearLogs,
+    ActivateInput,
+    Char(char),
+    Backspace,
+    Tab,
 }

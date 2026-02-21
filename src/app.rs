@@ -4,11 +4,13 @@ use tokio::sync::mpsc;
 
 use crate::agents::dispatch;
 use crate::agents::log::{append_event, clear_events, new_event, read_events, AgentEvent};
+use crate::agents::message;
 use crate::agents::retry::MAX_RETRIES;
 use crate::agents::store::AgentStore;
 use crate::config::{self, AppConfig, BoardMapping};
 use crate::event::KeyAction;
 use crate::model::agent::{AgentName, AgentStatus};
+use crate::model::chat::ChatMessage;
 use crate::model::work_item::WorkItem;
 use crate::providers::{self, BoardInfo, Provider};
 
@@ -21,6 +23,10 @@ pub enum Action {
     #[allow(dead_code)]
     PollAgents,
     AgentProcessExited(AgentName, bool),
+    AgentResponse(AgentName, String),
+    AgentResponseError(AgentName, String),
+    TaskCreated(WorkItem),
+    TaskCreateError(String),
     Quit,
 }
 
@@ -50,6 +56,15 @@ pub struct App {
     pub project_dir: String,
     providers: Vec<Box<dyn Provider>>,
     dispatched_item_ids: std::collections::HashSet<String>,
+
+    // Input & chat state
+    pub input_active: bool,
+    pub input_buffer: String,
+    pub input_cursor: usize,
+    pub chat_messages: Vec<ChatMessage>,
+    #[allow(dead_code)]
+    pub chat_scroll: usize,
+    pub waiting_for_response: bool,
 }
 
 impl App {
@@ -116,6 +131,12 @@ impl App {
             project_dir,
             providers,
             dispatched_item_ids: std::collections::HashSet::new(),
+            input_active: false,
+            input_buffer: String::new(),
+            input_cursor: 0,
+            chat_messages: Vec::new(),
+            chat_scroll: 0,
+            waiting_for_response: false,
         }
     }
 
@@ -128,7 +149,13 @@ impl App {
         }
 
         match action {
-            Action::Key(key) => self.handle_key(key).await,
+            Action::Key(key) => {
+                if self.input_active {
+                    self.handle_input_key(key).await;
+                } else {
+                    self.handle_key(key).await;
+                }
+            }
             Action::Tick => self.handle_tick().await,
             Action::WorkItemsLoaded(items) => {
                 self.items = items;
@@ -160,14 +187,297 @@ impl App {
                     let _ = self.store.mark_error(name, "Process failed");
                 }
             }
+            Action::AgentResponse(name, response) => {
+                self.waiting_for_response = false;
+                self.chat_messages.push(ChatMessage::agent(name, response));
+            }
+            Action::AgentResponseError(name, error) => {
+                self.waiting_for_response = false;
+                self.chat_messages.push(ChatMessage::system(format!(
+                    "{} error: {}",
+                    name.display_name(),
+                    error
+                )));
+            }
+            Action::TaskCreated(item) => {
+                self.chat_messages
+                    .push(ChatMessage::system(format!("Task created: {}", item.title)));
+                self.items.push(item);
+                // In auto mode, it will be picked up on next tick
+                if !self.auto_mode {
+                    self.flash_message = Some(("New task added — press d to dispatch".into(), Instant::now()));
+                }
+            }
+            Action::TaskCreateError(msg) => {
+                self.chat_messages
+                    .push(ChatMessage::system(format!("Failed to create task: {msg}")));
+            }
             Action::Quit => {
                 self.should_quit = true;
             }
         }
     }
 
+    async fn handle_input_key(&mut self, key: KeyAction) {
+        match key {
+            KeyAction::Escape => {
+                self.input_active = false;
+                self.input_buffer.clear();
+                self.input_cursor = 0;
+            }
+            KeyAction::Select => {
+                // Enter submits the input
+                let input = self.input_buffer.clone();
+                self.input_buffer.clear();
+                self.input_cursor = 0;
+                self.input_active = false;
+                if !input.trim().is_empty() {
+                    self.process_command(input).await;
+                }
+            }
+            KeyAction::Backspace => {
+                if self.input_cursor > 0 {
+                    self.input_cursor -= 1;
+                    self.input_buffer.remove(self.input_cursor);
+                }
+            }
+            KeyAction::Left => {
+                if self.input_cursor > 0 {
+                    self.input_cursor -= 1;
+                }
+            }
+            KeyAction::Right => {
+                if self.input_cursor < self.input_buffer.len() {
+                    self.input_cursor += 1;
+                }
+            }
+            KeyAction::Char(c) => {
+                self.input_buffer.insert(self.input_cursor, c);
+                self.input_cursor += 1;
+            }
+            KeyAction::Tab => {
+                // Auto-complete agent names
+                self.autocomplete_agent();
+            }
+            _ => {}
+        }
+    }
+
+    fn autocomplete_agent(&mut self) {
+        if !self.input_buffer.starts_with('@') {
+            return;
+        }
+        let partial = &self.input_buffer[1..];
+        for name in AgentName::ALL {
+            if name.as_str().starts_with(partial) && partial.len() < name.as_str().len() {
+                self.input_buffer = format!("@{} ", name.as_str());
+                self.input_cursor = self.input_buffer.len();
+                return;
+            }
+        }
+    }
+
+    async fn process_command(&mut self, input: String) {
+        if input.starts_with('@') {
+            self.process_agent_message(input).await;
+        } else {
+            self.process_task_creation(input).await;
+        }
+    }
+
+    async fn process_agent_message(&mut self, input: String) {
+        // Parse @agent_name message
+        let after_at = &input[1..];
+        let mut target_agent = None;
+        let mut agent_message = "";
+
+        for name in AgentName::ALL {
+            let prefix = name.as_str();
+            if after_at.starts_with(prefix) {
+                let rest = &after_at[prefix.len()..];
+                if rest.is_empty() || rest.starts_with(' ') {
+                    target_agent = Some(name);
+                    agent_message = rest.trim();
+                    break;
+                }
+            }
+        }
+
+        let agent_name = match target_agent {
+            Some(n) => n,
+            None => {
+                self.chat_messages.push(ChatMessage::system(
+                    "Unknown agent. Use @ember, @flow, @tempest, or @terra".to_string(),
+                ));
+                return;
+            }
+        };
+
+        if agent_message.is_empty() {
+            self.chat_messages.push(ChatMessage::system(format!(
+                "Send a message: @{} <your message>",
+                agent_name.as_str()
+            )));
+            return;
+        }
+
+        // Add user message to chat
+        self.chat_messages.push(ChatMessage::user(input.clone()));
+
+        // Determine work directory and task context
+        let agent = self.store.get_agent(agent_name);
+        let work_dir;
+        let task_context;
+        let is_working;
+
+        if let Some(agent) = agent {
+            is_working = agent.status == AgentStatus::Working;
+            work_dir = agent
+                .worktree_path
+                .clone()
+                .unwrap_or_else(|| self.repo_root.clone());
+            task_context = agent.work_item_title.clone();
+        } else {
+            is_working = false;
+            work_dir = self.repo_root.clone();
+            task_context = None;
+        }
+
+        // Check if the message is feedback for a working/done/error agent
+        let is_feedback = agent.map_or(false, |a| {
+            matches!(
+                a.status,
+                AgentStatus::Working | AgentStatus::Done | AgentStatus::Error
+            )
+        });
+
+        self.waiting_for_response = true;
+
+        if is_working {
+            // Agent is busy — tell user and queue the feedback
+            self.chat_messages.push(ChatMessage::system(format!(
+                "{} is currently working. Sending feedback that will be applied when done...",
+                agent_name.display_name()
+            )));
+        }
+
+        let tx = self.action_tx.clone();
+        let msg = agent_message.to_string();
+        let ctx = task_context.clone();
+
+        // Log the interaction
+        let _ = append_event(&new_event(
+            agent_name,
+            "user-message",
+            None,
+            task_context.as_deref(),
+            Some(agent_message),
+        ));
+
+        if is_feedback && !is_working {
+            // Apply feedback directly — agent can make changes
+            let wd = work_dir.clone();
+            let tc = ctx.unwrap_or_else(|| "No specific task".to_string());
+            tokio::spawn(async move {
+                match message::apply_feedback(agent_name, &msg, &wd, &tc).await {
+                    Ok(response) => {
+                        let _ = tx.send(Action::AgentResponse(agent_name, response));
+                    }
+                    Err(e) => {
+                        let _ = tx.send(Action::AgentResponseError(
+                            agent_name,
+                            e.to_string(),
+                        ));
+                    }
+                }
+            });
+        } else {
+            // Send message and get response (read-only conversation)
+            let wd = work_dir.clone();
+            let ctx_str = ctx.as_deref().map(|s| s.to_string());
+            tokio::spawn(async move {
+                match message::message_agent(
+                    agent_name,
+                    &msg,
+                    &wd,
+                    ctx_str.as_deref(),
+                )
+                .await
+                {
+                    Ok(response) => {
+                        let _ = tx.send(Action::AgentResponse(agent_name, response));
+                    }
+                    Err(e) => {
+                        let _ = tx.send(Action::AgentResponseError(
+                            agent_name,
+                            e.to_string(),
+                        ));
+                    }
+                }
+            });
+        }
+    }
+
+    async fn process_task_creation(&mut self, input: String) {
+        let title = input.trim().to_string();
+        if title.is_empty() {
+            return;
+        }
+
+        self.chat_messages.push(ChatMessage::user(format!("New task: {title}")));
+
+        // Create a local work item immediately
+        let local_item = WorkItem {
+            id: format!("LOCAL-{}", self.items.len() + 1),
+            source_id: None,
+            title: title.clone(),
+            description: None,
+            status: Some("Todo".to_string()),
+            priority: None,
+            labels: Vec::new(),
+            source: "Local".to_string(),
+            team: None,
+            url: None,
+        };
+
+        // Try to create in the active provider
+        let tx = self.action_tx.clone();
+        let mut created_in_provider = false;
+
+        for provider in &self.providers {
+            match provider.create_item(&title, None).await {
+                Ok(Some(item)) => {
+                    let _ = tx.send(Action::TaskCreated(item));
+                    created_in_provider = true;
+                    break;
+                }
+                Ok(None) => continue, // Provider doesn't support create
+                Err(e) => {
+                    let _ = tx.send(Action::TaskCreateError(format!(
+                        "{}: {}",
+                        provider.name(),
+                        e
+                    )));
+                    // Fall through to add locally
+                }
+            }
+        }
+
+        if !created_in_provider {
+            // Add as local item
+            let _ = tx.send(Action::TaskCreated(local_item));
+        }
+    }
+
     async fn handle_key(&mut self, key: KeyAction) {
         match key {
+            KeyAction::ActivateInput => {
+                self.input_active = true;
+                self.input_buffer.clear();
+                self.input_cursor = 0;
+            }
+            // Also allow entering input mode by just typing a character
+            // when not in a view that uses single-char shortcuts
             KeyAction::Up => match &self.view_mode {
                 ViewMode::BoardSelection => {
                     if self.selected_board > 0 {
@@ -230,7 +540,7 @@ impl App {
                 }
                 ViewMode::AgentDetail(_) => {}
             },
-            KeyAction::Left => match &self.view_mode {
+            KeyAction::Left | KeyAction::Escape => match &self.view_mode {
                 ViewMode::BoardSelection => {}
                 ViewMode::Items => {}
                 ViewMode::Agents => {
@@ -248,8 +558,7 @@ impl App {
             KeyAction::ToggleAutoMode => {
                 self.auto_mode = !self.auto_mode;
                 let status = if self.auto_mode { "AUTO" } else { "MANUAL" };
-                self.flash_message =
-                    Some((format!("Mode: {status}"), Instant::now()));
+                self.flash_message = Some((format!("Mode: {status}"), Instant::now()));
                 // Log mode change for all agents to see
                 let _ = append_event(&new_event(
                     AgentName::ALL[0],
@@ -288,6 +597,8 @@ impl App {
                     ));
                 }
             }
+            // Ignore unhandled keys in normal mode
+            KeyAction::Char(_) | KeyAction::Backspace | KeyAction::Tab => {}
         }
     }
 
