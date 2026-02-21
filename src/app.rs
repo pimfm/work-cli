@@ -147,6 +147,14 @@ impl App {
             Action::AgentProcessExited(name, success) => {
                 let _ = self.store.reload();
                 if success {
+                    // Move work item to done in source system
+                    if let Some(agent) = self.store.get_agent(name) {
+                        if let Some(item_id) = agent.work_item_id.clone() {
+                            if let Some(item) = self.items.iter().find(|i| i.id == item_id) {
+                                self.move_item_to_done(item.clone()).await;
+                            }
+                        }
+                    }
                     let _ = self.store.mark_done(name);
                 } else {
                     let _ = self.store.mark_error(name, "Process failed");
@@ -462,6 +470,30 @@ impl App {
 
     pub fn agent_events(&self, name: AgentName) -> Vec<AgentEvent> {
         read_events(Some(name), Some(200))
+    }
+
+    async fn move_item_to_done(&mut self, item: WorkItem) {
+        if let Some(source_id) = &item.source_id {
+            for provider in &self.providers {
+                if provider.name() == item.source {
+                    match provider.move_to_done(source_id).await {
+                        Ok(_) => {
+                            self.flash_message = Some((
+                                format!("{} moved to done", item.id),
+                                Instant::now(),
+                            ));
+                        }
+                        Err(e) => {
+                            self.flash_message = Some((
+                                format!("Failed to move {} to done: {e}", item.id),
+                                Instant::now(),
+                            ));
+                        }
+                    }
+                    break;
+                }
+            }
+        }
     }
 
     pub fn assigned_agent(&self, item_id: &str) -> Option<AgentName> {

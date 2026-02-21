@@ -101,7 +101,8 @@ impl Provider for JiraProvider {
                 let url = format!("{}/browse/{}", self.base_url, issue.key);
 
                 WorkItem {
-                    id: issue.key,
+                    id: issue.key.clone(),
+                    source_id: Some(issue.key),
                     title: issue.fields.summary.unwrap_or_default(),
                     description,
                     status: issue.fields.status.map(|s| s.name),
@@ -119,5 +120,56 @@ impl Provider for JiraProvider {
 
     async fn list_boards(&self) -> Result<Vec<BoardInfo>> {
         Ok(vec![])
+    }
+
+    async fn move_to_done(&self, source_id: &str) -> Result<()> {
+        // Get available transitions for this issue
+        let url = format!(
+            "{}/rest/api/3/issue/{}/transitions",
+            self.base_url, source_id
+        );
+
+        let resp: serde_json::Value = self
+            .client
+            .get(&url)
+            .header("Authorization", &self.auth_header)
+            .header("Accept", "application/json")
+            .send()
+            .await
+            .context("Failed to fetch Jira transitions")?
+            .json()
+            .await?;
+
+        // Find a transition to the "done" status category
+        let transition_id = resp
+            .get("transitions")
+            .and_then(|t| t.as_array())
+            .and_then(|transitions| {
+                transitions.iter().find_map(|t| {
+                    let category = t.pointer("/to/statusCategory/key")?.as_str()?;
+                    if category == "done" {
+                        t.get("id")?.as_str().map(|s| s.to_string())
+                    } else {
+                        None
+                    }
+                })
+            })
+            .context("No transition to Done status found")?;
+
+        // Execute the transition
+        let body = serde_json::json!({
+            "transition": { "id": transition_id }
+        });
+
+        self.client
+            .post(&url)
+            .header("Authorization", &self.auth_header)
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .await
+            .context("Failed to transition Jira issue to Done")?;
+
+        Ok(())
     }
 }

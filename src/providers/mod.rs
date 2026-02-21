@@ -21,7 +21,13 @@ pub trait Provider: Send + Sync {
     async fn fetch_items(&self) -> Result<Vec<WorkItem>>;
     async fn list_boards(&self) -> Result<Vec<BoardInfo>>;
     fn set_board_filter(&mut self, _board_id: String) {}
+    async fn move_to_done(&self, _source_id: &str) -> Result<()> {
+        Ok(())
+    }
 }
+
+#[cfg(test)]
+pub mod tests;
 
 pub fn create_providers(config: &AppConfig) -> Vec<Box<dyn Provider>> {
     let mut providers: Vec<Box<dyn Provider>> = Vec::new();

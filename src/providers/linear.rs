@@ -58,6 +58,7 @@ struct IssueConnection {
 
 #[derive(Deserialize)]
 struct Issue {
+    id: String,
     identifier: String,
     title: String,
     description: Option<String>,
@@ -135,6 +136,7 @@ impl Provider for LinearProvider {
 
                 WorkItem {
                     id: issue.identifier,
+                    source_id: Some(issue.id),
                     title: issue.title,
                     description,
                     status: issue.state.map(|s| s.name),
@@ -152,5 +154,64 @@ impl Provider for LinearProvider {
 
     async fn list_boards(&self) -> Result<Vec<BoardInfo>> {
         Ok(vec![])
+    }
+
+    async fn move_to_done(&self, source_id: &str) -> Result<()> {
+        // Find the issue's team and its completed workflow state
+        let query = r#"query($id: String!) {
+          issue(id: $id) {
+            team {
+              states(filter: { type: { eq: "completed" } }) {
+                nodes { id name }
+              }
+            }
+          }
+        }"#;
+
+        let body = serde_json::json!({
+            "query": query,
+            "variables": { "id": source_id }
+        });
+
+        let resp: serde_json::Value = self
+            .client
+            .post("https://api.linear.app/graphql")
+            .header("Authorization", &self.api_key)
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .await
+            .context("Linear API request failed")?
+            .json()
+            .await?;
+
+        let state_id = resp
+            .pointer("/data/issue/team/states/nodes/0/id")
+            .and_then(|v| v.as_str())
+            .context("No completed state found for issue's team")?
+            .to_string();
+
+        // Update the issue state
+        let mutation = r#"mutation($id: String!, $stateId: String!) {
+          issueUpdate(id: $id, input: { stateId: $stateId }) {
+            success
+          }
+        }"#;
+
+        let body = serde_json::json!({
+            "query": mutation,
+            "variables": { "id": source_id, "stateId": state_id }
+        });
+
+        self.client
+            .post("https://api.linear.app/graphql")
+            .header("Authorization", &self.api_key)
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .await
+            .context("Failed to update Linear issue state")?;
+
+        Ok(())
     }
 }

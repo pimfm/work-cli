@@ -82,6 +82,7 @@ impl Provider for GitHubProvider {
 
                 WorkItem {
                     id: format!("#{}", issue.number),
+                    source_id: issue.url.clone(),
                     title: issue.title,
                     description,
                     status: issue.state,
@@ -99,5 +100,21 @@ impl Provider for GitHubProvider {
 
     async fn list_boards(&self) -> Result<Vec<BoardInfo>> {
         Ok(vec![])
+    }
+
+    async fn move_to_done(&self, source_id: &str) -> Result<()> {
+        // source_id is the issue URL, close it via gh CLI
+        let output = tokio::process::Command::new("gh")
+            .args(["issue", "close", source_id])
+            .output()
+            .await
+            .context("Failed to run gh CLI")?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            anyhow::bail!("gh issue close failed: {stderr}");
+        }
+
+        Ok(())
     }
 }

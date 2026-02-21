@@ -195,6 +195,7 @@ impl Provider for TrelloProvider {
 
                 WorkItem {
                     id: card.id[..8.min(card.id.len())].to_string(),
+                    source_id: Some(card.id.clone()),
                     title: card.name,
                     description,
                     status,
@@ -245,5 +246,52 @@ impl Provider for TrelloProvider {
 
     fn set_board_filter(&mut self, board_id: String) {
         self.board_id = Some(board_id);
+    }
+
+    async fn move_to_done(&self, source_id: &str) -> Result<()> {
+        let base = "https://api.trello.com/1";
+
+        // Get the card's board ID
+        let card: Card = self
+            .client
+            .get(format!("{base}/cards/{source_id}"))
+            .query(&self.auth_params())
+            .query(&[("fields", "idBoard")])
+            .send()
+            .await
+            .context("Failed to fetch Trello card")?
+            .json()
+            .await?;
+
+        let board_id = card
+            .id_board
+            .context("Card has no board ID")?;
+
+        // Get the board's lists and find one named "Done"
+        let lists: Vec<TrelloList> = self
+            .client
+            .get(format!("{base}/boards/{board_id}/lists"))
+            .query(&self.auth_params())
+            .query(&[("fields", "id,name")])
+            .send()
+            .await?
+            .json()
+            .await?;
+
+        let done_list = lists
+            .iter()
+            .find(|l| l.name.eq_ignore_ascii_case("done"))
+            .context("No 'Done' list found on board")?;
+
+        // Move card to Done list
+        self.client
+            .put(format!("{base}/cards/{source_id}"))
+            .query(&self.auth_params())
+            .query(&[("idList", &done_list.id)])
+            .send()
+            .await
+            .context("Failed to move Trello card to Done")?;
+
+        Ok(())
     }
 }
