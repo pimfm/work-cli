@@ -33,7 +33,7 @@ mod tests {
     #[test]
     fn test_slugify() {
         assert_eq!(slugify("Add login validation"), "add-login-validation");
-        assert_eq!(slugify("Fix bug #42!"), "fix-bug--42-");
+        assert_eq!(slugify("Fix bug #42!"), "fix-bug--42");
     }
 
     #[test]
