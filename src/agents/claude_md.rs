@@ -12,19 +12,25 @@ pub fn write_claude_md(worktree_path: &Path, agent_name: AgentName) -> Result<()
         r#"# work pipeline
 
 ## Project Overview
-A terminal dashboard CLI (`work`) that aggregates work items from Trello, Linear, and Jira.
-Built with Rust, Ratatui (terminal UI).
+A terminal dashboard CLI (`work`) that aggregates work items from Trello, Linear, Jira, and GitHub.
+Built with Rust and Ratatui (terminal UI).
 
 ## Tech Stack
-- **Language**: Rust
+- **Language**: Rust (edition 2021)
 - **UI**: Ratatui + Crossterm
+- **Async**: Tokio
+- **HTTP**: reqwest
 - **Build**: cargo
 - **Test**: cargo test
 
 ## Conventions
-- Modules in `src/model/`, providers in `src/providers/`, UI in `src/ui/`
-- Use `anyhow` for error handling
-- Use `serde` for serialization
+- Models in `src/model/`, providers in `src/providers/`, UI in `src/ui/`
+- Agent infrastructure in `src/agents/`
+- Use `anyhow` for error handling, `thiserror` for custom errors
+- Use `serde` for serialization/deserialization
+- Config stored at `~/.localpipeline/config.toml`
+- Agent state stored at `~/.localpipeline/agents.json`
+- Activity log at `~/.localpipeline/agent-activity.jsonl`
 
 ## Testing
 - Run: `cargo test`
@@ -58,7 +64,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn claude_md_includes_focus_for_all_agents() {
+    fn claude_md_includes_personality_for_all_agents() {
         let dir = tempfile::tempdir().unwrap();
         for name in AgentName::ALL {
             write_claude_md(dir.path(), name).unwrap();
@@ -69,13 +75,46 @@ mod tests {
                 "{name} CLAUDE.md missing Focus field"
             );
             assert!(
+                content.contains("**Traits**:"),
+                "{name} CLAUDE.md missing Traits field"
+            );
+            assert!(
+                content.contains("**Working style**:"),
+                "{name} CLAUDE.md missing Working style field"
+            );
+            assert!(
                 content.contains(p.tagline),
                 "{name} CLAUDE.md missing tagline"
+            );
+            assert!(
+                content.contains(p.focus),
+                "{name} CLAUDE.md missing focus content"
+            );
+            assert!(
+                content.contains(p.system_prompt),
+                "{name} CLAUDE.md missing system prompt"
             );
             assert!(
                 content.contains(name.display_name()),
                 "{name} CLAUDE.md missing display name"
             );
         }
+    }
+
+    #[test]
+    fn claude_md_includes_project_conventions() {
+        let dir = tempfile::tempdir().unwrap();
+        write_claude_md(dir.path(), AgentName::Ember).unwrap();
+        let content = std::fs::read_to_string(dir.path().join("CLAUDE.md")).unwrap();
+        assert!(content.contains("src/agents/"), "missing agents convention");
+        assert!(
+            content.contains("config.toml"),
+            "missing config path convention"
+        );
+        assert!(
+            content.contains("agents.json"),
+            "missing agent state convention"
+        );
+        assert!(content.contains("thiserror"), "missing thiserror convention");
     }
 }
